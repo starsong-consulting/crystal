@@ -144,6 +144,7 @@ export const RichOutputView = React.forwardRef<{ scrollToPrompt: (promptIndex: n
   const loadMessagesRef = useRef<(() => Promise<void>) | null>(null);
   const isFirstLoadRef = useRef(true); // Track if this is the first load
   const previousMessageCountRef = useRef(0); // Track previous message count
+  const previousStatusRef = useRef<string | undefined>(undefined); // Track previous status
 
   // Save local settings to localStorage when they change
   useEffect(() => {
@@ -369,29 +370,41 @@ export const RichOutputView = React.forwardRef<{ scrollToPrompt: (promptIndex: n
     };
   }); // Run on every render to ensure we catch container availability
 
-  // Auto-scroll to bottom when messages change or view loads
+  // Auto-scroll to bottom when messages change, status changes, or view loads
   useEffect(() => {
-    // Only proceed if we have new messages (not just a re-render)
+    // Check if we have new messages (not just a re-render)
     const hasNewMessages = messages.length > previousMessageCountRef.current;
     previousMessageCountRef.current = messages.length;
-    
-    if (messagesEndRef.current && !loading && (hasNewMessages || isFirstLoadRef.current)) {
+
+    // Check if status changed (especially to 'waiting' which means task completed)
+    const statusChanged = sessionStatus !== previousStatusRef.current;
+    previousStatusRef.current = sessionStatus;
+
+    // Scroll if: new messages, status changed to waiting/completed, or first load
+    const shouldScroll = hasNewMessages ||
+                        (statusChanged && (sessionStatus === 'waiting' || sessionStatus === 'completed')) ||
+                        isFirstLoadRef.current;
+
+    if (messagesEndRef.current && !loading && shouldScroll) {
       // Use the wasAtBottomRef value that was captured BEFORE the messages updated
       // Don't double-check after DOM update as the scroll position will have changed
       if (isFirstLoadRef.current || wasAtBottomRef.current) {
         // Use requestAnimationFrame to ensure DOM has updated
+        // Double-RAF to ensure layout is complete
         requestAnimationFrame(() => {
-          // Use instant scrolling for better responsiveness during active output
-          // Smooth scrolling can be too slow and cause users to miss content
-          messagesEndRef.current?.scrollIntoView({ behavior: 'instant' as ScrollBehavior });
-          // Mark first load as complete
-          if (isFirstLoadRef.current) {
-            isFirstLoadRef.current = false;
-          }
+          requestAnimationFrame(() => {
+            // Use instant scrolling for better responsiveness during active output
+            // Smooth scrolling can be too slow and cause users to miss content
+            messagesEndRef.current?.scrollIntoView({ behavior: 'instant' as ScrollBehavior });
+            // Mark first load as complete
+            if (isFirstLoadRef.current) {
+              isFirstLoadRef.current = false;
+            }
+          });
         });
       }
     }
-  }, [messages, loading]);
+  }, [messages, loading, sessionStatus]);
 
   // Handle scroll events to show/hide scroll button
   useEffect(() => {
