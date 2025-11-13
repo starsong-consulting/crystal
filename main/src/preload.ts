@@ -306,6 +306,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Project groups
   projectGroups: {
     getAll: (): Promise<IPCResponse> => ipcRenderer.invoke('project-groups:get-all'),
+    getAllWithProjects: (): Promise<IPCResponse> => ipcRenderer.invoke('project-groups:get-all-with-projects'),
     get: (groupId: number): Promise<IPCResponse> => ipcRenderer.invoke('project-groups:get', groupId),
     create: (groupData: { name: string; description?: string; system_prompt?: string }): Promise<IPCResponse> => ipcRenderer.invoke('project-groups:create', groupData),
     update: (groupId: number, updates: { name?: string; description?: string | null; system_prompt?: string | null; display_order?: number }): Promise<IPCResponse> => ipcRenderer.invoke('project-groups:update', groupId, updates),

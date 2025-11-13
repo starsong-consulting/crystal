@@ -92,3 +92,7 @@ export interface AddProjectToGroupRequest {
   include_in_context?: boolean;
   role_description?: string;
 }
+
+export interface ProjectGroupWithProjects extends ProjectGroup {
+  projects: Project[];
+}

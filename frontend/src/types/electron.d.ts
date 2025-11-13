@@ -153,6 +153,7 @@ interface ElectronAPI {
   // Project groups
   projectGroups: {
     getAll: () => Promise<IPCResponse>;
+    getAllWithProjects: () => Promise<IPCResponse>;
     get: (groupId: number) => Promise<IPCResponse>;
     create: (groupData: { name: string; description?: string; system_prompt?: string }) => Promise<IPCResponse>;
     update: (groupId: number, updates: { name?: string; description?: string | null; system_prompt?: string | null; display_order?: number }) => Promise<IPCResponse>;

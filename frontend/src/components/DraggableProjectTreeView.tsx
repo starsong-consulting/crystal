@@ -12,7 +12,7 @@ import { API } from '../utils/api';
 import { debounce } from '../utils/debounce';
 import { throttle } from '../utils/performanceUtils';
 import type { Session } from '../types/session';
-import type { Project, CreateProjectRequest } from '../types/project';
+import type { Project, CreateProjectRequest, ProjectGroupWithProjects } from '../types/project';
 import type { Folder } from '../types/folder';
 import { useContextMenu } from '../contexts/ContextMenuContext';
 import { Modal, ModalHeader, ModalBody, ModalFooter } from './ui/Modal';
@@ -89,8 +89,10 @@ const createTreeItemComparator = (ascending: boolean) => {
 };
 
 export function DraggableProjectTreeView({ sessionSortAscending }: DraggableProjectTreeViewProps) {
+  const [groups, setGroups] = useState<ProjectGroupWithProjects[]>([]);
   const [projectsWithSessions, setProjectsWithSessions] = useState<ProjectWithSessions[]>([]);
   const [archivedProjectsWithSessions, setArchivedProjectsWithSessions] = useState<ProjectWithSessions[]>([]);
+  const [expandedGroups, setExpandedGroups] = useState<Set<number>>(new Set());
   const [expandedProjects, setExpandedProjects] = useState<Set<number>>(new Set());
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [expandedArchivedProjects, setExpandedArchivedProjects] = useState<Set<number>>(new Set());
@@ -102,6 +104,8 @@ export function DraggableProjectTreeView({ sessionSortAscending }: DraggableProj
   const [showProjectSettings, setShowProjectSettings] = useState(false);
   const [selectedProjectForSettings, setSelectedProjectForSettings] = useState<Project | null>(null);
   const [showAddProjectDialog, setShowAddProjectDialog] = useState(false);
+  // Track which group the user wants to add a new project to (will be used to auto-assign project to group after creation)
+  const [selectedGroupForNewProject, setSelectedGroupForNewProject] = useState<ProjectGroupWithProjects | null>(null);
   const [newProject, setNewProject] = useState<CreateProjectRequest>({ name: '', path: '', buildScript: '', runScript: '' });
   const [showValidationErrors, setShowValidationErrors] = useState(false);
   const activeSessionId = useSessionStore((state) => state.activeSessionId);
@@ -553,11 +557,19 @@ export function DraggableProjectTreeView({ sessionSortAscending }: DraggableProj
   const loadProjectsWithSessions = async () => {
     try {
       setIsLoading(true);
+
+      // Load groups with projects
+      const groupsResponse = await window.electronAPI.projectGroups.getAllWithProjects();
+      if (groupsResponse.success && groupsResponse.data) {
+        setGroups(groupsResponse.data as ProjectGroupWithProjects[]);
+      }
+
+      // Also load projects with sessions for compatibility with existing code
       const response = await API.sessions.getAllWithProjects();
       if (response.success && response.data) {
-        
+
         setProjectsWithSessions(response.data);
-        
+
         // Try to load saved UI state
         let savedState = null;
         try {
@@ -568,7 +580,7 @@ export function DraggableProjectTreeView({ sessionSortAscending }: DraggableProj
         } catch (error) {
           console.error('[DraggableProjectTreeView] Failed to load saved UI state:', error);
         }
-        
+
         if (savedState && savedState.expandedProjects && savedState.expandedFolders) {
           // Use saved state
           setExpandedProjects(new Set(savedState.expandedProjects));
@@ -577,12 +589,22 @@ export function DraggableProjectTreeView({ sessionSortAscending }: DraggableProj
           // Fall back to auto-expand logic
           const projectsToExpand = new Set<number>();
           const foldersToExpand = new Set<string>();
-          
+          const groupsToExpand = new Set<number>();
+
+          // Auto-expand groups that have projects
+          if (groupsResponse.success && groupsResponse.data) {
+            (groupsResponse.data as ProjectGroupWithProjects[]).forEach(group => {
+              if (group.projects.length > 0) {
+                groupsToExpand.add(group.id);
+              }
+            });
+          }
+
           response.data.forEach((project: ProjectWithSessions) => {
             if (project.sessions.length > 0) {
               projectsToExpand.add(project.id);
             }
-            
+
             // Auto-expand folders that contain sessions
             if (project.folders && project.folders.length > 0) {
               project.folders.forEach(folder => {
@@ -593,7 +615,7 @@ export function DraggableProjectTreeView({ sessionSortAscending }: DraggableProj
               });
             }
           });
-          
+
           // Also expand the project containing the active session
           if (activeSessionId) {
             response.data.forEach((project: ProjectWithSessions) => {
@@ -602,7 +624,8 @@ export function DraggableProjectTreeView({ sessionSortAscending }: DraggableProj
               }
             });
           }
-          
+
+          setExpandedGroups(groupsToExpand);
           setExpandedProjects(projectsToExpand);
           setExpandedFolders(foldersToExpand);
         }
@@ -632,13 +655,31 @@ export function DraggableProjectTreeView({ sessionSortAscending }: DraggableProj
     }
   };
 
+  const toggleGroup = useCallback((groupId: number, event?: React.MouseEvent) => {
+    // Prevent event from bubbling to parent handlers
+    if (event) {
+      event.stopPropagation();
+      event.preventDefault();
+    }
+
+    setExpandedGroups(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(groupId)) {
+        newSet.delete(groupId);
+      } else {
+        newSet.add(groupId);
+      }
+      return newSet;
+    });
+  }, []);
+
   const toggleProject = useCallback((projectId: number, event?: React.MouseEvent) => {
     // Prevent event from bubbling to parent handlers
     if (event) {
       event.stopPropagation();
       event.preventDefault();
     }
-    
+
     setExpandedProjects(prev => {
       const newSet = new Set(prev);
       if (newSet.has(projectId)) {
@@ -1107,14 +1148,28 @@ export function DraggableProjectTreeView({ sessionSortAscending }: DraggableProj
         return;
       }
 
+      // If a group was selected, add the project to that group
+      if (selectedGroupForNewProject && response.data?.id) {
+        try {
+          await window.electronAPI.projectGroups.addProject({
+            group_id: selectedGroupForNewProject.id,
+            project_id: response.data.id,
+            include_in_context: true
+          });
+        } catch (groupError) {
+          console.error('Failed to add project to group:', groupError);
+          // Don't fail the whole operation, just log the error
+        }
+      }
+
       setShowAddProjectDialog(false);
       setNewProject({ name: '', path: '', buildScript: '', runScript: '' });
       setDetectedBranchForNewProject(null);
       setShowValidationErrors(false);
-      
-      // Add the new project to the list without reloading everything
-      const newProjectWithSessions = { ...response.data, sessions: [], folders: [] };
-      setProjectsWithSessions(prev => [...prev, newProjectWithSessions]);
+      setSelectedGroupForNewProject(null);
+
+      // Reload projects and groups to reflect the changes
+      await loadProjectsWithSessions();
     } catch (error: unknown) {
       console.error('Failed to create project:', error);
       showError({
@@ -2006,20 +2061,59 @@ export function DraggableProjectTreeView({ sessionSortAscending }: DraggableProj
   return (
     <>
       <div className="space-y-1 px-2 pb-2">
-        {projectsWithSessions.length === 0 ? (
+        {groups.length === 0 ? (
           <EmptyState
             icon={FolderIcon}
             title="No Projects Yet"
             description="Add your first project to start managing Claude Code sessions."
             action={{
               label: 'Add Project',
-              onClick: () => setShowAddProjectDialog(true)
+              onClick: () => {
+                setSelectedGroupForNewProject(null);
+                setShowAddProjectDialog(true);
+              }
             }}
             className="py-8"
           />
         ) : (
           <>
-            {projectsWithSessions.map((project) => {
+            {groups.map((group) => {
+              const isGroupExpanded = expandedGroups.has(group.id);
+              const projectsInGroup = projectsWithSessions.filter(p => group.projects.some(gp => gp.id === p.id));
+
+              return (
+                <div key={group.id} className="mb-2">
+                  {/* Group Header */}
+                  <div className="flex items-center space-x-2 px-2 py-2 bg-surface-primary rounded-lg">
+                    <button
+                      onClick={(e) => toggleGroup(group.id, e)}
+                      className="p-0.5 hover:bg-surface-hover rounded transition-colors"
+                    >
+                      {isGroupExpanded ? (
+                        <ChevronDown className="w-3 h-3 text-text-tertiary" />
+                      ) : (
+                        <ChevronRight className="w-3 h-3 text-text-tertiary" />
+                      )}
+                    </button>
+                    <span className="text-sm font-bold text-text-primary flex-1">{group.name}</span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedGroupForNewProject(group);
+                        setShowAddProjectDialog(true);
+                      }}
+                      className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-text-secondary hover:text-text-primary hover:bg-surface-hover rounded transition-all"
+                      title="Add new project to this group"
+                    >
+                      <Plus className="w-3 h-3" />
+                      <span>New Project</span>
+                    </button>
+                  </div>
+
+                  {/* Projects in this group */}
+                  {isGroupExpanded && (
+                    <div className="ml-4 mt-1 space-y-1">
+                      {projectsInGroup.map((project) => {
           const isExpanded = expandedProjects.has(project.id);
           const sessionCount = project.sessions.length;
           const isDraggingOver = dragState.overType === 'project' && dragState.overProjectId === project.id;
@@ -2274,10 +2368,18 @@ export function DraggableProjectTreeView({ sessionSortAscending }: DraggableProj
             </div>
           );
         })}
-        
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
             <div className="mt-3 pt-3 border-t border-border-primary">
               <button
-                onClick={() => setShowAddProjectDialog(true)}
+                onClick={() => {
+                  setSelectedGroupForNewProject(null);
+                  setShowAddProjectDialog(true);
+                }}
                 className="w-full px-2 py-1.5 text-sm text-text-secondary hover:text-text-primary hover:bg-surface-hover rounded transition-colors flex items-center justify-center space-x-2"
               >
                 <Plus className="w-4 h-4" />
@@ -2406,13 +2508,14 @@ export function DraggableProjectTreeView({ sessionSortAscending }: DraggableProj
       )}
       
       {/* Add Project Dialog */}
-      <Modal 
-        isOpen={showAddProjectDialog} 
+      <Modal
+        isOpen={showAddProjectDialog}
         onClose={() => {
           setShowAddProjectDialog(false);
           setNewProject({ name: '', path: '', buildScript: '', runScript: '' });
           setDetectedBranchForNewProject(null);
           setShowValidationErrors(false);
+          setSelectedGroupForNewProject(null);
         }}
         size="lg"
       >
@@ -2555,6 +2658,7 @@ export function DraggableProjectTreeView({ sessionSortAscending }: DraggableProj
               setNewProject({ name: '', path: '', buildScript: '', runScript: '' });
               setDetectedBranchForNewProject(null);
               setShowValidationErrors(false);
+              setSelectedGroupForNewProject(null);
             }}
             variant="ghost"
             size="md"

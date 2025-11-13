@@ -16,6 +16,17 @@ export function registerProjectGroupHandlers(ipcMain: IpcMain, services: AppServ
     }
   });
 
+  // Get all project groups with their projects
+  ipcMain.handle('project-groups:get-all-with-projects', async () => {
+    try {
+      const groupsWithProjects = databaseService.getAllProjectGroupsWithProjects();
+      return { success: true, data: groupsWithProjects };
+    } catch (error) {
+      console.error('Failed to get project groups with projects:', error);
+      return { success: false, error: 'Failed to get project groups with projects' };
+    }
+  });
+
   // Get a specific project group
   ipcMain.handle('project-groups:get', async (_event, groupId: number) => {
     try {

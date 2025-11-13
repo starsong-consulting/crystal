@@ -1718,6 +1718,22 @@ export class DatabaseService {
     };
   }
 
+  getAllProjectGroupsWithProjects(): Array<ProjectGroup & { projects: Project[] }> {
+    const groups = this.getAllProjectGroups();
+
+    return groups.map(group => {
+      const members = this.getProjectGroupMembers(group.id);
+      const projects = members
+        .map(member => this.getProject(member.project_id))
+        .filter((project): project is Project => project !== undefined);
+
+      return {
+        ...group,
+        projects
+      };
+    });
+  }
+
   updateProjectGroupMember(id: number, updates: { include_in_context?: boolean; role_description?: string | null; display_order?: number }): ProjectGroupMember | undefined {
     const fields: string[] = [];
     const values: unknown[] = [];
