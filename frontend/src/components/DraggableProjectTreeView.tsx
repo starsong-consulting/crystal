@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { ChevronRight, ChevronDown, Folder as FolderIcon, FolderOpen, Plus, Settings, GripVertical, Archive, GitBranch, RefreshCw } from 'lucide-react';
+import { ChevronRight, ChevronDown, Folder as FolderIcon, FolderOpen, Plus, Settings, GripVertical, Archive, GitBranch, RefreshCw, Pencil, Trash2, Check, X } from 'lucide-react';
 import { useSessionStore } from '../stores/sessionStore';
 import { useErrorStore } from '../stores/errorStore';
 import { useNavigationStore } from '../stores/navigationStore';
@@ -32,10 +32,11 @@ interface DragState {
   projectId: number | null;
   sessionId: string | null;
   folderId: string | null;
-  overType: 'project' | 'session' | 'folder' | null;
+  overType: 'project' | 'session' | 'folder' | 'group' | null;
   overProjectId: number | null;
   overSessionId: string | null;
   overFolderId: string | null;
+  overGroupId: number | null;
 }
 
 interface DraggableProjectTreeViewProps {
@@ -107,6 +108,8 @@ export function DraggableProjectTreeView({ sessionSortAscending }: DraggableProj
   const [showAddGroupDialog, setShowAddGroupDialog] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupDescription, setNewGroupDescription] = useState('');
+  const [editingGroupId, setEditingGroupId] = useState<number | null>(null);
+  const [editingGroupName, setEditingGroupName] = useState('');
   // Track which group the user wants to add a new project to (will be used to auto-assign project to group after creation)
   const [selectedGroupForNewProject, setSelectedGroupForNewProject] = useState<ProjectGroupWithProjects | null>(null);
   const [newProject, setNewProject] = useState<CreateProjectRequest>({ name: '', path: '', buildScript: '', runScript: '' });
@@ -150,7 +153,8 @@ export function DraggableProjectTreeView({ sessionSortAscending }: DraggableProj
     overType: null,
     overProjectId: null,
     overSessionId: null,
-    overFolderId: null
+    overFolderId: null,
+    overGroupId: null
   });
   const dragCounter = useRef(0);
   
@@ -1210,6 +1214,74 @@ export function DraggableProjectTreeView({ sessionSortAscending }: DraggableProj
     }
   };
 
+  const handleStartGroupEdit = (group: ProjectGroupWithProjects) => {
+    setEditingGroupId(group.id);
+    setEditingGroupName(group.name);
+  };
+
+  const handleSaveGroupEdit = async () => {
+    if (!editingGroupId || !editingGroupName.trim()) {
+      return;
+    }
+
+    try {
+      const response = await window.electronAPI.projectGroups.update(editingGroupId, {
+        name: editingGroupName.trim()
+      });
+
+      if (!response.success) {
+        showError({
+          title: 'Failed to Rename Group',
+          error: response.error || 'An error occurred while renaming the group.'
+        });
+        return;
+      }
+
+      setEditingGroupId(null);
+      setEditingGroupName('');
+
+      // Reload to reflect the changes
+      await loadProjectsWithSessions();
+    } catch (error: unknown) {
+      console.error('Failed to rename group:', error);
+      showError({
+        title: 'Failed to Rename Group',
+        error: error instanceof Error ? error.message : 'An error occurred while renaming the group.'
+      });
+    }
+  };
+
+  const handleCancelGroupEdit = () => {
+    setEditingGroupId(null);
+    setEditingGroupName('');
+  };
+
+  const handleDeleteGroup = async (groupId: number, groupName: string) => {
+    const confirmed = confirm(`Are you sure you want to delete the group "${groupName}"?\n\nProjects in this group will not be deleted, just ungrouped.`);
+    if (!confirmed) return;
+
+    try {
+      const response = await window.electronAPI.projectGroups.delete(groupId);
+
+      if (!response.success) {
+        showError({
+          title: 'Failed to Delete Group',
+          error: response.error || 'An error occurred while deleting the group.'
+        });
+        return;
+      }
+
+      // Reload to reflect the changes
+      await loadProjectsWithSessions();
+    } catch (error: unknown) {
+      console.error('Failed to delete group:', error);
+      showError({
+        title: 'Failed to Delete Group',
+        error: error instanceof Error ? error.message : 'An error occurred while deleting the group.'
+      });
+    }
+  };
+
   const handleCreateFolder = async () => {
     if (!newFolderName || !selectedProjectForFolder) return;
 
@@ -1270,7 +1342,8 @@ export function DraggableProjectTreeView({ sessionSortAscending }: DraggableProj
       overType: null,
       overProjectId: null,
       overSessionId: null,
-      overFolderId: null
+      overFolderId: null,
+      overGroupId: null
     });
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', JSON.stringify({ type: 'project', id: project.id }));
@@ -1286,7 +1359,8 @@ export function DraggableProjectTreeView({ sessionSortAscending }: DraggableProj
       overType: null,
       overProjectId: null,
       overSessionId: null,
-      overFolderId: null
+      overFolderId: null,
+      overGroupId: null
     });
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', JSON.stringify({ type: 'session', id: session.id, projectId }));
@@ -1302,7 +1376,8 @@ export function DraggableProjectTreeView({ sessionSortAscending }: DraggableProj
       overType: null,
       overProjectId: null,
       overSessionId: null,
-      overFolderId: null
+      overFolderId: null,
+      overGroupId: null
     });
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', JSON.stringify({ type: 'folder', id: folder.id, projectId }));
@@ -1317,7 +1392,8 @@ export function DraggableProjectTreeView({ sessionSortAscending }: DraggableProj
       overType: null,
       overProjectId: null,
       overSessionId: null,
-      overFolderId: null
+      overFolderId: null,
+      overGroupId: null
     });
     dragCounter.current = 0;
   };
@@ -1792,6 +1868,78 @@ export function DraggableProjectTreeView({ sessionSortAscending }: DraggableProj
     handleDragEnd();
   };
 
+  const handleGroupDragOver = (e: React.DragEvent, groupId: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Only allow dragging projects into groups
+    if (dragState.type === 'project') {
+      setDragState(prev => ({
+        ...prev,
+        overType: 'group',
+        overGroupId: groupId
+      }));
+    }
+  };
+
+  const handleGroupDrop = async (e: React.DragEvent, groupId: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (dragState.type === 'project' && dragState.projectId) {
+      try {
+        // Add project to group
+        const response = await window.electronAPI.projectGroups.addProject({
+          group_id: groupId,
+          project_id: dragState.projectId,
+          include_in_context: true
+        });
+
+        if (!response.success) {
+          showError({
+            title: 'Failed to add project to group',
+            error: response.error || 'Unknown error occurred'
+          });
+          return;
+        }
+
+        // Reload to reflect changes
+        await loadProjectsWithSessions();
+      } catch (error: unknown) {
+        console.error('Failed to add project to group:', error);
+        showError({
+          title: 'Failed to add project to group',
+          error: error instanceof Error ? error.message : 'Unknown error occurred'
+        });
+      }
+    }
+
+    handleDragEnd();
+  };
+
+  const handleRemoveFromGroup = async (projectId: number, groupId: number) => {
+    try {
+      const response = await window.electronAPI.projectGroups.removeProject(groupId, projectId);
+
+      if (!response.success) {
+        showError({
+          title: 'Failed to remove project from group',
+          error: response.error || 'Unknown error occurred'
+        });
+        return;
+      }
+
+      // Reload to reflect changes
+      await loadProjectsWithSessions();
+    } catch (error: unknown) {
+      console.error('Failed to remove project from group:', error);
+      showError({
+        title: 'Failed to remove project from group',
+        error: error instanceof Error ? error.message : 'Unknown error occurred'
+      });
+    }
+  };
+
   const handleDragLeave = (e: React.DragEvent) => {
     e.preventDefault();
     dragCounter.current--;
@@ -1801,7 +1949,8 @@ export function DraggableProjectTreeView({ sessionSortAscending }: DraggableProj
         overType: null,
         overProjectId: null,
         overSessionId: null,
-        overFolderId: null
+        overFolderId: null,
+        overGroupId: null
       }));
     }
   };
@@ -2091,7 +2240,7 @@ export function DraggableProjectTreeView({ sessionSortAscending }: DraggableProj
   return (
     <>
       <div className="space-y-1 px-2 pb-2">
-        {groups.length === 0 ? (
+        {groups.length === 0 && projectsWithSessions.length === 0 ? (
           <EmptyState
             icon={FolderIcon}
             title="No Projects Yet"
@@ -2107,14 +2256,39 @@ export function DraggableProjectTreeView({ sessionSortAscending }: DraggableProj
           />
         ) : (
           <>
-            {groups.map((group) => {
+            {/* Groups Section */}
+            {groups.length > 0 && (
+              <div className="mb-4">
+                <div className="flex items-center justify-between px-2 py-2 mb-1">
+                  <h3 className="text-sm font-bold text-text-secondary uppercase tracking-wide">Groups</h3>
+                  <button
+                    onClick={() => setShowAddGroupDialog(true)}
+                    className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-text-secondary hover:text-text-primary hover:bg-surface-hover rounded transition-all"
+                    title="Add new group"
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>Add Group</span>
+                  </button>
+                </div>
+
+                {groups.map((group) => {
               const isGroupExpanded = expandedGroups.has(group.id);
               const projectsInGroup = projectsWithSessions.filter(p => group.projects.some(gp => gp.id === p.id));
+
+              const isDraggingOverGroup = dragState.overType === 'group' && dragState.overGroupId === group.id;
 
               return (
                 <div key={group.id} className="mb-2">
                   {/* Group Header */}
-                  <div className="flex items-center space-x-2 px-2 py-2 bg-surface-primary rounded-lg">
+                  <div
+                    className={`flex items-center space-x-2 px-2 py-2 bg-surface-primary rounded-lg group/group ${
+                      isDraggingOverGroup ? 'ring-2 ring-interactive' : ''
+                    }`}
+                    onDragOver={(e) => handleGroupDragOver(e, group.id)}
+                    onDrop={(e) => handleGroupDrop(e, group.id)}
+                    onDragEnter={handleDragEnter}
+                    onDragLeave={handleDragLeave}
+                  >
                     <button
                       onClick={(e) => toggleGroup(group.id, e)}
                       className="p-0.5 hover:bg-surface-hover rounded transition-colors"
@@ -2125,19 +2299,75 @@ export function DraggableProjectTreeView({ sessionSortAscending }: DraggableProj
                         <ChevronRight className="w-3 h-3 text-text-tertiary" />
                       )}
                     </button>
-                    <span className="text-sm font-bold text-text-primary flex-1">{group.name}</span>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedGroupForNewProject(group);
-                        setShowAddProjectDialog(true);
-                      }}
-                      className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-text-secondary hover:text-text-primary hover:bg-surface-hover rounded transition-all"
-                      title="Add new project to this group"
-                    >
-                      <Plus className="w-3 h-3" />
-                      <span>New Project</span>
-                    </button>
+
+                    {editingGroupId === group.id ? (
+                      <>
+                        <input
+                          type="text"
+                          value={editingGroupName}
+                          onChange={(e) => setEditingGroupName(e.target.value)}
+                          className="flex-1 px-2 py-1 text-sm bg-surface-secondary border border-border-primary rounded text-text-primary focus:outline-none focus:border-interactive"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              handleSaveGroupEdit();
+                            } else if (e.key === 'Escape') {
+                              handleCancelGroupEdit();
+                            }
+                          }}
+                        />
+                        <button
+                          onClick={handleSaveGroupEdit}
+                          className="p-1 hover:bg-surface-hover rounded transition-colors"
+                          title="Save"
+                        >
+                          <Check className="w-3 h-3 text-status-success" />
+                        </button>
+                        <button
+                          onClick={handleCancelGroupEdit}
+                          className="p-1 hover:bg-surface-hover rounded transition-colors"
+                          title="Cancel"
+                        >
+                          <X className="w-3 h-3 text-text-tertiary" />
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-sm font-bold text-text-primary flex-1">{group.name}</span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleStartGroupEdit(group);
+                          }}
+                          className="p-1 hover:bg-surface-hover rounded transition-colors opacity-0 group-hover/group:opacity-100"
+                          title="Edit group name"
+                        >
+                          <Pencil className="w-3 h-3 text-text-tertiary" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteGroup(group.id, group.name);
+                          }}
+                          className="p-1 hover:bg-surface-hover rounded transition-colors opacity-0 group-hover/group:opacity-100"
+                          title="Delete group"
+                        >
+                          <Trash2 className="w-3 h-3 text-status-error" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedGroupForNewProject(group);
+                            setShowAddProjectDialog(true);
+                          }}
+                          className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-text-secondary hover:text-text-primary hover:bg-surface-hover rounded transition-all"
+                          title="Add new project to this group"
+                        >
+                          <Plus className="w-3 h-3" />
+                          <span>New Project</span>
+                        </button>
+                      </>
+                    )}
                   </div>
 
                   {/* Projects in this group */}
@@ -2264,6 +2494,17 @@ export function DraggableProjectTreeView({ sessionSortAscending }: DraggableProj
                     {closingProjectId === project.id ? '⏸️' : runningProjectId === project.id ? '⏹️' : '▶️'}
                   </button>
                 )}
+
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleRemoveFromGroup(project.id, group.id);
+                  }}
+                  className="p-1 hover:bg-surface-hover rounded transition-colors opacity-0 group-hover:opacity-100"
+                  title="Remove from group"
+                >
+                  <X className="w-3 h-3 text-text-tertiary hover:text-status-error" />
+                </button>
 
                 <button
                   onClick={(e) => {
@@ -2403,7 +2644,285 @@ export function DraggableProjectTreeView({ sessionSortAscending }: DraggableProj
                 </div>
               );
             })}
+              </div>
+            )}
 
+            {/* Ungrouped Projects Section */}
+            {(() => {
+              const ungroupedProjects = projectsWithSessions.filter(project =>
+                !groups.some(group => group.projects.some(gp => gp.id === project.id))
+              );
+
+              if (ungroupedProjects.length === 0) return null;
+
+              return (
+                <div className="mb-4">
+                  <div className="flex items-center justify-between px-2 py-2 mb-1">
+                    <h3 className="text-sm font-bold text-text-secondary uppercase tracking-wide">Ungrouped Projects</h3>
+                  </div>
+
+                  <div className="space-y-1">
+                    {ungroupedProjects.map((project) => {
+                      const isExpanded = expandedProjects.has(project.id);
+                      const sessionCount = project.sessions.length;
+                      const isDraggingOver = dragState.overType === 'project' && dragState.overProjectId === project.id;
+                      const unviewedCount = project.sessions.filter(s => s.status === 'completed_unviewed').length;
+                      const isActiveProject = activeProjectId === project.id;
+
+                      return (
+                        <div key={project.id} className="mb-1">
+                          <div
+                            className={`group flex items-center space-x-1 px-2 py-2 rounded-lg transition-colors ${
+                              isActiveProject
+                                ? 'bg-interactive/10 text-interactive'
+                                : isDraggingOver
+                                  ? 'bg-interactive/20'
+                                  : 'bg-surface-secondary/50 hover:bg-surface-hover'
+                            }`}
+                            draggable
+                            onDragStart={(e) => handleProjectDragStart(e, project)}
+                            onDragEnd={handleDragEnd}
+                            onDragOver={(e) => handleProjectDragOver(e, project)}
+                            onDrop={(e) => handleProjectDrop(e, project)}
+                            onDragEnter={handleDragEnter}
+                            onDragLeave={handleDragLeave}
+                          >
+                            <div className="opacity-0 group-hover:opacity-100 transition-opacity cursor-move">
+                              <GripVertical className="w-3 h-3 text-text-tertiary" />
+                            </div>
+
+                            {(sessionCount > 0 || (project.folders && project.folders.length > 0)) ? (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  e.preventDefault();
+                                  toggleProject(project.id, e);
+                                }}
+                                onMouseDown={(e) => {
+                                  // Prevent drag start when clicking the toggle button
+                                  e.stopPropagation();
+                                }}
+                                className="p-0.5 hover:bg-surface-hover rounded transition-colors z-10"
+                              >
+                                {isExpanded ? (
+                                  <ChevronDown className="w-3 h-3 text-text-tertiary" />
+                                ) : (
+                                  <ChevronRight className="w-3 h-3 text-text-tertiary" />
+                                )}
+                              </button>
+                            ) : (
+                              <div className="w-3 h-3 p-0.5" />
+                            )}
+
+                            <div
+                              className="flex items-center space-x-2 flex-1 min-w-0 cursor-pointer"
+                              onClick={() => handleProjectClick(project)}
+                            >
+                              <div className="relative" title="Git-backed project (connected to repository)">
+                                <GitBranch className="w-4 h-4 text-interactive flex-shrink-0" />
+                              </div>
+                              <span className="text-sm font-semibold text-text-primary truncate text-left" title={project.name}>
+                                {project.name}
+                              </span>
+                              {unviewedCount > 0 && (
+                                <span className="ml-2 px-1.5 py-0.5 text-xs font-medium bg-interactive text-white rounded-full animate-pulse">
+                                  {unviewedCount}
+                                </span>
+                              )}
+                            </div>
+
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                // Check if cmd/ctrl is held for quick add
+                                if (e.metaKey || e.ctrlKey) {
+                                  handleQuickAddSession(project);
+                                } else {
+                                  handleCreateSession(project);
+                                }
+                              }}
+                              className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-text-secondary hover:text-text-primary hover:bg-surface-hover rounded transition-all opacity-0 group-hover:opacity-100"
+                              title={`New Session${navigator.platform.includes('Mac') ? ' (⌘' : ' (Ctrl'}+click for quick session)`}
+                            >
+                              <Plus className="w-3 h-3" />
+                              <span>New Session</span>
+                            </button>
+
+                            <button
+                              onClick={(e) => handleRefreshProjectGitStatus(project, e)}
+                              disabled={refreshingProjects.has(project.id)}
+                              className={`p-1 hover:bg-gray-200 dark:hover:bg-gray-600 rounded transition-all opacity-0 group-hover:opacity-100 ${
+                                refreshingProjects.has(project.id) ? 'cursor-wait' : ''
+                              }`}
+                              title="Refresh git status for all sessions"
+                            >
+                              <RefreshCw className={`w-3 h-3 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 ${
+                                refreshingProjects.has(project.id) ? 'animate-spin' : ''
+                              }`} />
+                            </button>
+
+                            {project.run_script && project.run_script.trim() && (
+                              <button
+                                onClick={(e) => handleRunProjectScript(project, e)}
+                                disabled={closingProjectId === project.id}
+                                className={`transition-opacity p-1 rounded ${
+                                  closingProjectId === project.id
+                                    ? 'cursor-wait text-status-warning'
+                                    : runningProjectId === project.id
+                                    ? 'hover:bg-status-error/10 text-status-error hover:text-status-error opacity-100'
+                                    : 'opacity-0 group-hover:opacity-100 hover:bg-status-success/10 text-status-success hover:text-status-success'
+                                }`}
+                                title={
+                                  closingProjectId === project.id
+                                    ? 'Closing script...'
+                                    : runningProjectId === project.id
+                                    ? 'Stop script'
+                                    : 'Run project script in project root'
+                                }
+                              >
+                                {closingProjectId === project.id ? '⏸️' : runningProjectId === project.id ? '⏹️' : '▶️'}
+                              </button>
+                            )}
+
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedProjectForSettings(project);
+                                setShowProjectSettings(true);
+                              }}
+                              className="p-1 hover:bg-surface-hover rounded transition-colors opacity-0 group-hover:opacity-100"
+                              title="Project settings"
+                            >
+                              <Settings className="w-3 h-3 text-text-tertiary hover:text-text-primary" />
+                            </button>
+                          </div>
+
+                          {isExpanded && (sessionCount > 0 || (project.folders && project.folders.length > 0)) && (
+                            <div className="relative mt-1 space-y-1">
+                              {/* Main vertical line from project to all children */}
+                              <div className="absolute top-0 bottom-0 w-px bg-border-secondary" style={{ left: '8px' }} />
+                              {/* Render folders and sessions mixed together by displayOrder */}
+                              {(() => {
+                                // Get root folders (folders without a parent)
+                                const folderTree = project.folders ? buildFolderTree(project.folders) : [];
+                                // Get root sessions (sessions not in any folder)
+                                const rootSessions = project.sessions.filter(s => !s.folderId);
+
+                                const rootItems: TreeItem[] = [
+                                  ...folderTree.map(folder => ({
+                                    type: 'folder' as const,
+                                    data: folder,
+                                    id: folder.id,
+                                    name: folder.name,
+                                    displayOrder: folder.displayOrder ?? 0,
+                                    createdAtValue: parseCreatedAt(folder.createdAt)
+                                  })),
+                                  ...rootSessions.map(session => ({
+                                    type: 'session' as const,
+                                    data: session,
+                                    id: session.id,
+                                    name: session.name,
+                                    displayOrder: session.displayOrder ?? 0,
+                                    createdAtValue: parseCreatedAt(session.createdAt)
+                                  }))
+                                ];
+
+                                rootItems.sort(treeComparator);
+
+                                // Render each item based on its type
+                                return rootItems.map((item, index, array) => {
+                                  const isLastItem = index === array.length - 1;
+
+                                  if (item.type === 'folder') {
+                                    return renderFolder(item.data, project, 1, isLastItem, [!isLastItem]);
+                                  } else {
+                                    // Render session
+                                    const session = item.data;
+                                    const isDraggingOverSession = dragState.overType === 'session' &&
+                                                                 dragState.overSessionId === session.id &&
+                                                                 dragState.overProjectId === project.id;
+
+                                    return (
+                                      <div
+                                        key={session.id}
+                                        className="relative"
+                                        style={{ marginLeft: '16px' }}
+                                      >
+                                        {/* Tree lines for root sessions */}
+                                        <div className="absolute inset-0 pointer-events-none">
+                                          {/* Vertical line from parent if not last session */}
+                                          {!isLastItem && (
+                                            <div
+                                              className="absolute top-0 bottom-0 w-px bg-border-secondary"
+                                              style={{ left: '8px' }}
+                                            />
+                                          )}
+
+                                          {/* Horizontal connector line for root session */}
+                                          <div
+                                            className="absolute h-px bg-border-secondary"
+                                            style={{
+                                              left: '8px',
+                                              right: 'calc(100% - 16px)',
+                                              top: '16px'
+                                            }}
+                                          />
+                                        </div>
+
+                                        <div
+                                          className={`relative group flex items-center ${
+                                            isDraggingOverSession ? 'bg-interactive/20 rounded' : ''
+                                          }`}
+                                          style={{ marginLeft: '0px', paddingLeft: '8px' }}
+                                          draggable
+                                          onDragStart={(e) => handleSessionDragStart(e, session, project.id)}
+                                          onDragEnd={handleDragEnd}
+                                          onDragOver={(e) => handleSessionDragOver(e, session, project.id)}
+                                          onDrop={(e) => handleSessionDrop(e, session, project.id)}
+                                          onDragEnter={handleDragEnter}
+                                          onDragLeave={handleDragLeave}
+                                        >
+                                          <div className="opacity-0 group-hover:opacity-100 transition-opacity cursor-move pl-1">
+                                            <GripVertical className="w-3 h-3 text-text-tertiary" />
+                                          </div>
+                                          <SessionListItem
+                                            key={session.id}
+                                            session={session}
+                                            isNested
+                                          />
+                                        </div>
+                                      </div>
+                                    );
+                                  }
+                                });
+                              })()}
+
+                              {/* Add folder button */}
+                              <div className="ml-6 mt-2 border-t border-border-primary pt-2">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedProjectForFolder(project);
+                                    setShowCreateFolderDialog(true);
+                                    setNewFolderName('');
+                                  }}
+                                  className="w-full px-2 py-1 text-xs text-text-secondary hover:text-text-primary hover:bg-surface-hover rounded transition-colors flex items-center space-x-1"
+                                >
+                                  <Plus className="w-3 h-3" />
+                                  <span>Add Folder</span>
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* New Project Button */}
             <div className="mt-3 pt-3 border-t border-border-primary">
               <button
                 onClick={() => {
@@ -2782,6 +3301,79 @@ export function DraggableProjectTreeView({ sessionSortAscending }: DraggableProj
                 className="px-4 py-2 bg-interactive hover:bg-interactive-hover text-white rounded-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 Create Folder
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Group Dialog */}
+      {showAddGroupDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => {
+          setShowAddGroupDialog(false);
+          setNewGroupName('');
+          setNewGroupDescription('');
+        }}>
+          <div className="bg-surface-primary rounded-lg shadow-xl max-w-md w-full mx-4 p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-text-primary mb-4">
+              Create New Group
+            </h3>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-1">
+                  Group Name <span className="text-status-error">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={newGroupName}
+                  onChange={(e) => setNewGroupName(e.target.value)}
+                  className="w-full px-3 py-2 bg-surface-secondary border border-border-primary rounded-md text-text-primary focus:outline-none focus:border-interactive focus:ring-1 focus:ring-interactive placeholder-text-tertiary"
+                  placeholder="My Project Group"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && newGroupName.trim()) {
+                      handleCreateGroup();
+                    } else if (e.key === 'Escape') {
+                      setShowAddGroupDialog(false);
+                      setNewGroupName('');
+                      setNewGroupDescription('');
+                    }
+                  }}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-1">
+                  Description (optional)
+                </label>
+                <textarea
+                  value={newGroupDescription}
+                  onChange={(e) => setNewGroupDescription(e.target.value)}
+                  className="w-full px-3 py-2 bg-surface-secondary border border-border-primary rounded-md text-text-primary focus:outline-none focus:border-interactive focus:ring-1 focus:ring-interactive placeholder-text-tertiary resize-none"
+                  placeholder="Describe the purpose of this group..."
+                  rows={3}
+                />
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end space-x-3">
+              <button
+                onClick={() => {
+                  setShowAddGroupDialog(false);
+                  setNewGroupName('');
+                  setNewGroupDescription('');
+                }}
+                className="px-4 py-2 text-text-secondary hover:text-text-primary transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateGroup}
+                disabled={!newGroupName.trim()}
+                className="px-4 py-2 bg-interactive hover:bg-interactive-hover text-white rounded-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                Create Group
               </button>
             </div>
           </div>
