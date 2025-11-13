@@ -37,6 +37,7 @@ interface DragState {
   overSessionId: string | null;
   overFolderId: string | null;
   overGroupId: number | null;
+  insertPosition: 'before' | 'after' | null;
 }
 
 interface DraggableProjectTreeViewProps {
@@ -155,7 +156,8 @@ export const DraggableProjectTreeView = forwardRef<{ openAddGroupDialog: () => v
     overProjectId: null,
     overSessionId: null,
     overFolderId: null,
-    overGroupId: null
+    overGroupId: null,
+    insertPosition: null
   });
   const dragCounter = useRef(0);
 
@@ -1355,6 +1357,13 @@ export const DraggableProjectTreeView = forwardRef<{ openAddGroupDialog: () => v
     }
   };
 
+  // Helper function to calculate insert position based on cursor position
+  const getInsertPosition = (e: React.DragEvent, element: HTMLElement): 'before' | 'after' => {
+    const rect = element.getBoundingClientRect();
+    const midpoint = rect.top + rect.height / 2;
+    return e.clientY < midpoint ? 'before' : 'after';
+  };
+
   // Drag and drop handlers
   const handleProjectDragStart = (e: React.DragEvent, project: Project) => {
     e.stopPropagation();
@@ -1367,7 +1376,8 @@ export const DraggableProjectTreeView = forwardRef<{ openAddGroupDialog: () => v
       overProjectId: null,
       overSessionId: null,
       overFolderId: null,
-      overGroupId: null
+      overGroupId: null,
+      insertPosition: null
     });
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', JSON.stringify({ type: 'project', id: project.id }));
@@ -1384,7 +1394,8 @@ export const DraggableProjectTreeView = forwardRef<{ openAddGroupDialog: () => v
       overProjectId: null,
       overSessionId: null,
       overFolderId: null,
-      overGroupId: null
+      overGroupId: null,
+      insertPosition: null
     });
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', JSON.stringify({ type: 'session', id: session.id, projectId }));
@@ -1401,7 +1412,8 @@ export const DraggableProjectTreeView = forwardRef<{ openAddGroupDialog: () => v
       overProjectId: null,
       overSessionId: null,
       overFolderId: null,
-      overGroupId: null
+      overGroupId: null,
+      insertPosition: null
     });
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', JSON.stringify({ type: 'folder', id: folder.id, projectId }));
@@ -1417,7 +1429,8 @@ export const DraggableProjectTreeView = forwardRef<{ openAddGroupDialog: () => v
       overProjectId: null,
       overSessionId: null,
       overFolderId: null,
-      overGroupId: null
+      overGroupId: null,
+      insertPosition: null
     });
     dragCounter.current = 0;
   };
@@ -1459,6 +1472,8 @@ export const DraggableProjectTreeView = forwardRef<{ openAddGroupDialog: () => v
     e.preventDefault();
     e.stopPropagation();
 
+    const insertPosition = getInsertPosition(e, e.currentTarget as HTMLElement);
+
     // Allow both sessions and folders to be reordered relative to sessions
     if (dragState.type === 'session' &&
         dragState.projectId === projectId &&
@@ -1467,7 +1482,8 @@ export const DraggableProjectTreeView = forwardRef<{ openAddGroupDialog: () => v
         ...prev,
         overType: 'session',
         overProjectId: projectId,
-        overSessionId: session.id
+        overSessionId: session.id,
+        insertPosition
       }));
     } else if (dragState.type === 'folder' &&
                dragState.projectId === projectId) {
@@ -1476,7 +1492,8 @@ export const DraggableProjectTreeView = forwardRef<{ openAddGroupDialog: () => v
         ...prev,
         overType: 'session',
         overProjectId: projectId,
-        overSessionId: session.id
+        overSessionId: session.id,
+        insertPosition
       }));
     }
   };
@@ -1754,7 +1771,9 @@ export const DraggableProjectTreeView = forwardRef<{ openAddGroupDialog: () => v
   const handleFolderDragOver = (e: React.DragEvent, folder: Folder, projectId: number) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
+    const insertPosition = getInsertPosition(e, e.currentTarget as HTMLElement);
+
     // Allow sessions to be dropped into folders
     if (dragState.type === 'session') {
       setDragState(prev => ({
@@ -1762,7 +1781,8 @@ export const DraggableProjectTreeView = forwardRef<{ openAddGroupDialog: () => v
         overType: 'folder',
         overProjectId: projectId,
         overFolderId: folder.id,
-        overSessionId: null
+        overSessionId: null,
+        insertPosition
       }));
     } else if (dragState.type === 'folder' && dragState.folderId !== folder.id) {
       // Allow folders to be reordered (but not nested)
@@ -1771,7 +1791,8 @@ export const DraggableProjectTreeView = forwardRef<{ openAddGroupDialog: () => v
         overType: 'folder',
         overProjectId: projectId,
         overFolderId: folder.id,
-        overSessionId: null
+        overSessionId: null,
+        insertPosition
       }));
     }
   };
@@ -2058,19 +2079,26 @@ export const DraggableProjectTreeView = forwardRef<{ openAddGroupDialog: () => v
             />
           )}
         </div>
-        <div 
-          className={`relative group/folder flex items-center space-x-1 py-1 rounded cursor-pointer transition-colors hover:bg-surface-hover ${
-            isDraggingOverFolder ? 'bg-interactive/20' : ''
-          }`}
-          style={{ marginLeft: `${0}px`, paddingLeft: '8px', paddingRight: '8px' }}
-          draggable
-          onDragStart={(e) => handleFolderDragStart(e, folder, project.id)}
-          onDragOver={(e) => handleFolderDragOver(e, folder, project.id)}
-          onDrop={(e) => handleFolderDrop(e, folder, project.id)}
-          onDragEnter={handleDragEnter}
-          onDragLeave={handleDragLeave}
-          onContextMenu={(e) => handleFolderContextMenu(e, folder, project.id)}
-        >
+
+        <div className="relative">
+          {/* Insertion indicator - before */}
+          {isDraggingOverFolder && dragState.insertPosition === 'before' && (
+            <div className="absolute left-0 right-0 -top-0.5 h-0.5 bg-interactive z-10">
+              <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1.5 h-1.5 bg-interactive rounded-full" />
+            </div>
+          )}
+
+          <div
+            className={`relative group/folder flex items-center space-x-1 py-1 rounded cursor-pointer transition-colors hover:bg-surface-hover`}
+            style={{ marginLeft: `${0}px`, paddingLeft: '8px', paddingRight: '8px' }}
+            draggable
+            onDragStart={(e) => handleFolderDragStart(e, folder, project.id)}
+            onDragOver={(e) => handleFolderDragOver(e, folder, project.id)}
+            onDrop={(e) => handleFolderDrop(e, folder, project.id)}
+            onDragEnter={handleDragEnter}
+            onDragLeave={handleDragLeave}
+            onContextMenu={(e) => handleFolderContextMenu(e, folder, project.id)}
+          >
           <div className="opacity-0 group-hover/folder:opacity-100 transition-opacity cursor-move">
             <GripVertical className="w-3 h-3 text-text-tertiary" />
           </div>
@@ -2172,8 +2200,16 @@ export const DraggableProjectTreeView = forwardRef<{ openAddGroupDialog: () => v
           >
             <span className="text-status-error hover:text-status-error">🗑️</span>
           </button>
+          </div>
+
+          {/* Insertion indicator - after */}
+          {isDraggingOverFolder && dragState.insertPosition === 'after' && (
+            <div className="absolute left-0 right-0 -bottom-0.5 h-0.5 bg-interactive z-10">
+              <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1.5 h-1.5 bg-interactive rounded-full" />
+            </div>
+          )}
         </div>
-        
+
         {isExpanded && hasChildren && (
           <div className="mt-1 space-y-1" style={{ marginLeft: '16px' }}>
             {(() => {
@@ -2239,27 +2275,41 @@ export const DraggableProjectTreeView = forwardRef<{ openAddGroupDialog: () => v
                       />
                     </div>
 
-                    <div
-                      className={`relative group flex items-center ${
-                        isDraggingOverSession ? 'bg-interactive/20 rounded' : ''
-                      }`}
-                      style={{ marginLeft: '0px', paddingLeft: '8px' }}
-                      draggable
-                      onDragStart={(e) => handleSessionDragStart(e, session, project.id)}
-                      onDragEnd={handleDragEnd}
-                      onDragOver={(e) => handleSessionDragOver(e, session, project.id)}
-                      onDrop={(e) => handleSessionDrop(e, session, project.id)}
-                      onDragEnter={handleDragEnter}
-                      onDragLeave={handleDragLeave}
-                    >
-                      <div className="opacity-0 group-hover:opacity-100 transition-opacity cursor-move pl-1">
-                        <GripVertical className="w-3 h-3 text-text-tertiary" />
+                    <div className="relative">
+                      {/* Insertion indicator - before */}
+                      {isDraggingOverSession && dragState.insertPosition === 'before' && (
+                        <div className="absolute left-0 right-0 -top-0.5 h-0.5 bg-interactive z-10">
+                          <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1.5 h-1.5 bg-interactive rounded-full" />
+                        </div>
+                      )}
+
+                      <div
+                        className={`relative group flex items-center`}
+                        style={{ marginLeft: '0px', paddingLeft: '8px' }}
+                        draggable
+                        onDragStart={(e) => handleSessionDragStart(e, session, project.id)}
+                        onDragEnd={handleDragEnd}
+                        onDragOver={(e) => handleSessionDragOver(e, session, project.id)}
+                        onDrop={(e) => handleSessionDrop(e, session, project.id)}
+                        onDragEnter={handleDragEnter}
+                        onDragLeave={handleDragLeave}
+                      >
+                        <div className="opacity-0 group-hover:opacity-100 transition-opacity cursor-move pl-1">
+                          <GripVertical className="w-3 h-3 text-text-tertiary" />
+                        </div>
+                        <SessionListItem
+                          key={session.id}
+                          session={session}
+                          isNested
+                        />
                       </div>
-                      <SessionListItem
-                        key={session.id}
-                        session={session}
-                        isNested
-                      />
+
+                      {/* Insertion indicator - after */}
+                      {isDraggingOverSession && dragState.insertPosition === 'after' && (
+                        <div className="absolute left-0 right-0 -bottom-0.5 h-0.5 bg-interactive z-10">
+                          <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1.5 h-1.5 bg-interactive rounded-full" />
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -2608,27 +2658,41 @@ export const DraggableProjectTreeView = forwardRef<{ openAddGroupDialog: () => v
                               />
                             </div>
 
-                            <div
-                              className={`relative group flex items-center ${
-                                isDraggingOverSession ? 'bg-interactive/20 rounded' : ''
-                              }`}
-                              style={{ marginLeft: '0px', paddingLeft: '8px' }}
-                              draggable
-                              onDragStart={(e) => handleSessionDragStart(e, session, project.id)}
-                              onDragEnd={handleDragEnd}
-                              onDragOver={(e) => handleSessionDragOver(e, session, project.id)}
-                              onDrop={(e) => handleSessionDrop(e, session, project.id)}
-                              onDragEnter={handleDragEnter}
-                              onDragLeave={handleDragLeave}
-                            >
-                              <div className="opacity-0 group-hover:opacity-100 transition-opacity cursor-move pl-1">
-                                <GripVertical className="w-3 h-3 text-text-tertiary" />
+                            <div className="relative">
+                              {/* Insertion indicator - before */}
+                              {isDraggingOverSession && dragState.insertPosition === 'before' && (
+                                <div className="absolute left-0 right-0 -top-0.5 h-0.5 bg-interactive z-10">
+                                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1.5 h-1.5 bg-interactive rounded-full" />
+                                </div>
+                              )}
+
+                              <div
+                                className={`relative group flex items-center`}
+                                style={{ marginLeft: '0px', paddingLeft: '8px' }}
+                                draggable
+                                onDragStart={(e) => handleSessionDragStart(e, session, project.id)}
+                                onDragEnd={handleDragEnd}
+                                onDragOver={(e) => handleSessionDragOver(e, session, project.id)}
+                                onDrop={(e) => handleSessionDrop(e, session, project.id)}
+                                onDragEnter={handleDragEnter}
+                                onDragLeave={handleDragLeave}
+                              >
+                                <div className="opacity-0 group-hover:opacity-100 transition-opacity cursor-move pl-1">
+                                  <GripVertical className="w-3 h-3 text-text-tertiary" />
+                                </div>
+                                <SessionListItem
+                                  key={session.id}
+                                  session={session}
+                                  isNested
+                                />
                               </div>
-                              <SessionListItem
-                                key={session.id}
-                                session={session}
-                                isNested
-                              />
+
+                              {/* Insertion indicator - after */}
+                              {isDraggingOverSession && dragState.insertPosition === 'after' && (
+                                <div className="absolute left-0 right-0 -bottom-0.5 h-0.5 bg-interactive z-10">
+                                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1.5 h-1.5 bg-interactive rounded-full" />
+                                </div>
+                              )}
                             </div>
                           </div>
                         );
@@ -2913,27 +2977,41 @@ export const DraggableProjectTreeView = forwardRef<{ openAddGroupDialog: () => v
                               />
                             </div>
 
-                            <div
-                              className={`relative group flex items-center ${
-                                isDraggingOverSession ? 'bg-interactive/20 rounded' : ''
-                              }`}
-                              style={{ marginLeft: '0px', paddingLeft: '8px' }}
-                              draggable
-                              onDragStart={(e) => handleSessionDragStart(e, session, project.id)}
-                              onDragEnd={handleDragEnd}
-                              onDragOver={(e) => handleSessionDragOver(e, session, project.id)}
-                              onDrop={(e) => handleSessionDrop(e, session, project.id)}
-                              onDragEnter={handleDragEnter}
-                              onDragLeave={handleDragLeave}
-                            >
-                              <div className="opacity-0 group-hover:opacity-100 transition-opacity cursor-move pl-1">
-                                <GripVertical className="w-3 h-3 text-text-tertiary" />
+                            <div className="relative">
+                              {/* Insertion indicator - before */}
+                              {isDraggingOverSession && dragState.insertPosition === 'before' && (
+                                <div className="absolute left-0 right-0 -top-0.5 h-0.5 bg-interactive z-10">
+                                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1.5 h-1.5 bg-interactive rounded-full" />
+                                </div>
+                              )}
+
+                              <div
+                                className={`relative group flex items-center`}
+                                style={{ marginLeft: '0px', paddingLeft: '8px' }}
+                                draggable
+                                onDragStart={(e) => handleSessionDragStart(e, session, project.id)}
+                                onDragEnd={handleDragEnd}
+                                onDragOver={(e) => handleSessionDragOver(e, session, project.id)}
+                                onDrop={(e) => handleSessionDrop(e, session, project.id)}
+                                onDragEnter={handleDragEnter}
+                                onDragLeave={handleDragLeave}
+                              >
+                                <div className="opacity-0 group-hover:opacity-100 transition-opacity cursor-move pl-1">
+                                  <GripVertical className="w-3 h-3 text-text-tertiary" />
+                                </div>
+                                <SessionListItem
+                                  key={session.id}
+                                  session={session}
+                                  isNested
+                                />
                               </div>
-                              <SessionListItem
-                                key={session.id}
-                                session={session}
-                                isNested
-                              />
+
+                              {/* Insertion indicator - after */}
+                              {isDraggingOverSession && dragState.insertPosition === 'after' && (
+                                <div className="absolute left-0 right-0 -bottom-0.5 h-0.5 bg-interactive z-10">
+                                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1.5 h-1.5 bg-interactive rounded-full" />
+                                </div>
+                              )}
                             </div>
                           </div>
                         );
