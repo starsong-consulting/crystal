@@ -1511,11 +1511,22 @@ export const DraggableProjectTreeView = forwardRef<{ openAddGroupDialog: () => v
       // Reorder projects
       const sourceIndex = projectsWithSessions.findIndex(p => p.id === dragState.projectId);
       const targetIndex = projectsWithSessions.findIndex(p => p.id === targetProject.id);
-      
+
       if (sourceIndex !== -1 && targetIndex !== -1) {
         const newProjects = [...projectsWithSessions];
         const [removed] = newProjects.splice(sourceIndex, 1);
-        newProjects.splice(targetIndex, 0, removed);
+
+        // Calculate insert position: if 'after', insert after target; if 'before', insert before
+        let insertIndex = targetIndex;
+        if (dragState.insertPosition === 'after') {
+          // If we removed an item before the target, the target index has shifted down
+          insertIndex = sourceIndex < targetIndex ? targetIndex : targetIndex + 1;
+        } else {
+          // 'before' - adjust if we removed an item before the target
+          insertIndex = sourceIndex < targetIndex ? targetIndex - 1 : targetIndex;
+        }
+
+        newProjects.splice(insertIndex, 0, removed);
         
         // Update display order for all projects
         const projectOrders = newProjects.map((project, index) => ({
@@ -1632,7 +1643,18 @@ export const DraggableProjectTreeView = forwardRef<{ openAddGroupDialog: () => v
         if (sourceItemIndex !== -1 && targetItemIndex !== -1) {
           // Remove the source item and insert it at the target position
           const [removedItem] = rootItems.splice(sourceItemIndex, 1);
-          rootItems.splice(targetItemIndex, 0, removedItem);
+
+          // Calculate insert position: if 'after', insert after target; if 'before', insert before
+          let insertIndex = targetItemIndex;
+          if (dragState.insertPosition === 'after') {
+            // If we removed an item before the target, the target index has shifted down
+            insertIndex = sourceItemIndex < targetItemIndex ? targetItemIndex : targetItemIndex + 1;
+          } else {
+            // 'before' - adjust if we removed an item before the target
+            insertIndex = sourceItemIndex < targetItemIndex ? targetItemIndex - 1 : targetItemIndex;
+          }
+
+          rootItems.splice(insertIndex, 0, removedItem);
 
           // Reassign displayOrder values sequentially to reflect the new order
           rootItems.forEach((item, index) => {
