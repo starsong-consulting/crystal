@@ -52,3 +52,43 @@ export interface UpdateProjectRequest {
   commit_structured_prompt_template?: string;
   commit_checkpoint_prefix?: string;
 }
+
+export interface ProjectGroup {
+  id: number;
+  name: string;
+  description?: string | null;
+  system_prompt?: string | null;
+  display_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProjectGroupMember {
+  id: number;
+  group_id: number;
+  project_id: number;
+  include_in_context: boolean;
+  role_description?: string | null;
+  display_order: number;
+  created_at: string;
+}
+
+export interface CreateProjectGroupRequest {
+  name: string;
+  description?: string;
+  system_prompt?: string;
+}
+
+export interface UpdateProjectGroupRequest {
+  name?: string;
+  description?: string | null;
+  system_prompt?: string | null;
+  display_order?: number;
+}
+
+export interface AddProjectToGroupRequest {
+  group_id: number;
+  project_id: number;
+  include_in_context?: boolean;
+  role_description?: string;
+}
