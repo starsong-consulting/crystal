@@ -268,7 +268,7 @@ export function ProjectTreeView() {
 
   const detectCurrentBranch = async (path: string) => {
     if (!path) return;
-    
+
     try {
       const response = await API.projects.detectBranch(path);
       if (response.success && response.data) {
@@ -277,6 +277,24 @@ export function ProjectTreeView() {
     } catch (error) {
       console.log('Could not detect branch');
       setDetectedBranchForNewProject(null);
+    }
+  };
+
+  const deriveProjectNameFromPath = (path: string): string => {
+    if (!path) return '';
+    // Get the last component of the path
+    const lastComponent = path.split(/[/\\]/).filter(Boolean).pop() || '';
+    return lastComponent;
+  };
+
+  const handlePathChange = (path: string) => {
+    setNewProject({ ...newProject, path });
+    detectCurrentBranch(path);
+
+    // Auto-derive the project name from the path if it's empty
+    if (!newProject.name) {
+      const derivedName = deriveProjectNameFromPath(path);
+      setNewProject(prev => ({ ...prev, name: derivedName }));
     }
   };
 
@@ -472,21 +490,8 @@ export function ProjectTreeView() {
         <div className="fixed inset-0 bg-modal-overlay flex items-center justify-center z-50">
           <div className="bg-surface-primary rounded-lg p-6 w-96 shadow-xl border border-border-primary">
             <h3 className="text-lg font-semibold text-text-primary mb-4">Add New Project</h3>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-text-secondary mb-1">
-                  Project Name
-                </label>
-                <input
-                  type="text"
-                  value={newProject.name}
-                  onChange={(e) => setNewProject({ ...newProject, name: e.target.value })}
-                  className="w-full px-3 py-2 bg-surface-secondary border border-border-primary rounded-md text-text-primary focus:outline-none focus:border-interactive focus:ring-1 focus:ring-interactive placeholder-text-tertiary"
-                  placeholder="My Project"
-                />
-              </div>
 
+            <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-text-secondary mb-1">
                   Repository Path
@@ -495,10 +500,7 @@ export function ProjectTreeView() {
                   <input
                     type="text"
                     value={newProject.path}
-                    onChange={(e) => {
-                      setNewProject({ ...newProject, path: e.target.value });
-                      detectCurrentBranch(e.target.value);
-                    }}
+                    onChange={(e) => handlePathChange(e.target.value)}
                     className="flex-1 px-3 py-2 bg-surface-secondary border border-border-primary rounded-md text-text-primary focus:outline-none focus:border-interactive focus:ring-1 focus:ring-interactive placeholder-text-tertiary"
                     placeholder="/path/to/repository"
                   />
@@ -510,8 +512,7 @@ export function ProjectTreeView() {
                         buttonLabel: 'Select',
                       });
                       if (result.success && result.data) {
-                        setNewProject({ ...newProject, path: result.data });
-                        detectCurrentBranch(result.data);
+                        handlePathChange(result.data);
                       }
                     }}
                     className="px-4 py-2 text-sm font-medium text-text-secondary bg-surface-tertiary border border-border-primary rounded-md hover:bg-surface-hover focus:outline-none focus:ring-2 focus:ring-interactive"
@@ -519,6 +520,22 @@ export function ProjectTreeView() {
                     Browse
                   </button>
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-1">
+                  Project Name
+                </label>
+                <input
+                  type="text"
+                  value={newProject.name}
+                  onChange={(e) => setNewProject({ ...newProject, name: e.target.value })}
+                  className="w-full px-3 py-2 bg-surface-secondary border border-border-primary rounded-md text-text-primary focus:outline-none focus:border-interactive focus:ring-1 focus:ring-interactive placeholder-text-tertiary"
+                  placeholder="Auto-derived from path"
+                />
+                <p className="text-xs text-text-tertiary mt-1">
+                  Automatically derived from the last component of the repository path. Edit to customize.
+                </p>
               </div>
 
               <div>
