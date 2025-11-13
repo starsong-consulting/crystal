@@ -150,6 +150,20 @@ interface ElectronAPI {
     stopScript: (projectId?: number) => Promise<IPCResponse>;
   };
 
+  // Project groups
+  projectGroups: {
+    getAll: () => Promise<IPCResponse>;
+    get: (groupId: number) => Promise<IPCResponse>;
+    create: (groupData: { name: string; description?: string; system_prompt?: string }) => Promise<IPCResponse>;
+    update: (groupId: number, updates: { name?: string; description?: string | null; system_prompt?: string | null; display_order?: number }) => Promise<IPCResponse>;
+    delete: (groupId: number) => Promise<IPCResponse>;
+    getMembers: (groupId: number) => Promise<IPCResponse>;
+    getForProject: (projectId: number) => Promise<IPCResponse>;
+    addProject: (data: { group_id: number; project_id: number; include_in_context?: boolean; role_description?: string }) => Promise<IPCResponse>;
+    removeProject: (groupId: number, projectId: number) => Promise<IPCResponse>;
+    updateMember: (memberId: number, updates: { include_in_context?: boolean; role_description?: string | null; display_order?: number }) => Promise<IPCResponse>;
+  };
+
   // Git operations
   git: {
     detectBranch: (path: string) => Promise<IPCResponse<string>>;
