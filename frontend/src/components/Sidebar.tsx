@@ -22,7 +22,7 @@ export function Sidebar({ onHelpClick, onAboutClick, onPromptHistoryClick, width
   const [gitCommit, setGitCommit] = useState<string>('');
   const [worktreeName, setWorktreeName] = useState<string>('');
   const [sessionSortAscending, setSessionSortAscending] = useState<boolean>(false); // Default to descending (newest first)
-  const treeViewRef = useRef<{ openAddGroupDialog: () => void }>(null);
+  const treeViewRef = useRef<{ openAddGroupDialog: () => void; openAddProjectDialog: () => void }>(null);
 
   useEffect(() => {
     // Fetch version info and UI state on component mount
@@ -141,6 +141,12 @@ export function Sidebar({ onHelpClick, onAboutClick, onPromptHistoryClick, width
           <div className="px-4 py-2 text-sm uppercase flex items-center justify-between overflow-hidden">
             <span className="truncate text-text-tertiary">Projects & Sessions</span>
             <div className="flex items-center space-x-1">
+              <IconButton
+                aria-label="Add Project"
+                size="sm"
+                onClick={() => treeViewRef.current?.openAddProjectDialog()}
+                icon={<Plus className="w-4 h-4" />}
+              />
               <IconButton
                 aria-label="Add Group"
                 size="sm"
