@@ -1438,14 +1438,17 @@ export const DraggableProjectTreeView = forwardRef<{ openAddGroupDialog: () => v
   const handleProjectDragOver = (e: React.DragEvent, project: Project) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
+    const insertPosition = getInsertPosition(e, e.currentTarget as HTMLElement);
+
     if (dragState.type === 'project' && dragState.projectId !== project.id) {
       setDragState(prev => ({
         ...prev,
         overType: 'project',
         overProjectId: project.id,
         overSessionId: null,
-        overFolderId: null
+        overFolderId: null,
+        insertPosition
       }));
     } else if (dragState.type === 'session') {
       // Allow sessions to be dropped on projects (to move out of folders)
@@ -1454,7 +1457,8 @@ export const DraggableProjectTreeView = forwardRef<{ openAddGroupDialog: () => v
         overType: 'project',
         overProjectId: project.id,
         overSessionId: null,
-        overFolderId: null
+        overFolderId: null,
+        insertPosition
       }));
     } else if (dragState.type === 'folder' && dragState.projectId === project.id) {
       // Allow folders to be reordered within the same project
@@ -1463,7 +1467,8 @@ export const DraggableProjectTreeView = forwardRef<{ openAddGroupDialog: () => v
         overType: 'project',
         overProjectId: project.id,
         overSessionId: null,
-        overFolderId: null
+        overFolderId: null,
+        insertPosition
       }));
     }
   };
@@ -2460,13 +2465,18 @@ export const DraggableProjectTreeView = forwardRef<{ openAddGroupDialog: () => v
           
           return (
             <div key={project.id} className="mb-1">
-              <div 
+              {/* Insertion indicator - before */}
+              {isDraggingOver && dragState.insertPosition === 'before' && (
+                <div className="absolute left-0 right-0 -top-0.5 h-0.5 bg-interactive z-10">
+                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1.5 h-1.5 bg-interactive rounded-full" />
+                </div>
+              )}
+
+              <div
                 className={`group flex items-center space-x-1 px-2 py-2 rounded-lg transition-colors ${
-                  isActiveProject 
-                    ? 'bg-interactive/10 text-interactive' 
-                    : isDraggingOver 
-                      ? 'bg-interactive/20' 
-                      : 'bg-surface-secondary/50 hover:bg-surface-hover'
+                  isActiveProject
+                    ? 'bg-interactive/10 text-interactive'
+                    : 'bg-surface-secondary/50 hover:bg-surface-hover'
                 }`}
                 draggable
                 onDragStart={(e) => handleProjectDragStart(e, project)}
@@ -2717,6 +2727,13 @@ export const DraggableProjectTreeView = forwardRef<{ openAddGroupDialog: () => v
                   </div>
                 </div>
               )}
+
+              {/* Insertion indicator - after */}
+              {isDraggingOver && dragState.insertPosition === 'after' && (
+                <div className="absolute left-0 right-0 -bottom-0.5 h-0.5 bg-interactive z-10">
+                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1.5 h-1.5 bg-interactive rounded-full" />
+                </div>
+              )}
             </div>
           );
         })}
@@ -2734,7 +2751,8 @@ export const DraggableProjectTreeView = forwardRef<{ openAddGroupDialog: () => v
                 !groups.some(group => group.projects.some(gp => gp.id === project.id))
               );
 
-              if (ungroupedProjects.length === 0) return null;
+              // Always show Ungrouped group if there are any groups (even if empty), so it can be a drag target
+              if (ungroupedProjects.length === 0 && groups.length === 0) return null;
 
               const UNGROUPED_GROUP_ID = -1;
               const isGroupExpanded = expandedGroups.has(UNGROUPED_GROUP_ID);
@@ -2770,7 +2788,12 @@ export const DraggableProjectTreeView = forwardRef<{ openAddGroupDialog: () => v
                   {/* Projects in ungrouped virtual group */}
                   {isGroupExpanded && (
                     <div className="ml-4 mt-1 space-y-1">
-                      {ungroupedProjects.map((project) => {
+                      {ungroupedProjects.length === 0 ? (
+                        <div className="px-2 py-3 text-sm text-text-tertiary italic">
+                          No ungrouped projects. Drag projects here to remove them from groups.
+                        </div>
+                      ) : (
+                        ungroupedProjects.map((project) => {
           const isExpanded = expandedProjects.has(project.id);
           const sessionCount = project.sessions.length;
           const isDraggingOver = dragState.overType === 'project' && dragState.overProjectId === project.id;
@@ -3036,9 +3059,17 @@ export const DraggableProjectTreeView = forwardRef<{ openAddGroupDialog: () => v
                   </div>
                 </div>
               )}
+
+              {/* Insertion indicator - after */}
+              {isDraggingOver && dragState.insertPosition === 'after' && (
+                <div className="absolute left-0 right-0 -bottom-0.5 h-0.5 bg-interactive z-10">
+                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1.5 h-1.5 bg-interactive rounded-full" />
+                </div>
+              )}
             </div>
           );
-        })}
+        })
+                      )}
                     </div>
                   )}
                 </div>
