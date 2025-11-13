@@ -1334,28 +1334,93 @@ export class DatabaseService {
         throw error;
       }
     }
+
+    // Migration 007: Auto-create groups for existing standalone projects
+    const hasAutoGroups = this.db.prepare("SELECT COUNT(*) as count FROM project_groups WHERE name LIKE 'auto-%'").get() as { count: number };
+    if (hasAutoGroups.count === 0) {
+      console.log('[Database] Running auto-group migration 007...');
+
+      try {
+        this.transaction(() => {
+          // Get all projects that aren't in a group
+          const standaloneProjects = this.db.prepare(`
+            SELECT p.* FROM projects p
+            LEFT JOIN project_group_members pgm ON p.id = pgm.project_id
+            WHERE pgm.id IS NULL
+          `).all() as Array<{ id: number; name: string }>;
+
+          // Create a group for each standalone project
+          for (const project of standaloneProjects) {
+            // Get max display order
+            const maxOrder = this.db.prepare('SELECT MAX(display_order) as max FROM project_groups').get() as { max: number | null };
+            const displayOrder = (maxOrder?.max ?? -1) + 1;
+
+            // Create group
+            const groupResult = this.db.prepare(`
+              INSERT INTO project_groups (name, description, display_order)
+              VALUES (?, ?, ?)
+            `).run(project.name, null, displayOrder);
+
+            // Add project to group
+            this.db.prepare(`
+              INSERT INTO project_group_members (group_id, project_id, include_in_context, display_order)
+              VALUES (?, ?, 1, 0)
+            `).run(groupResult.lastInsertRowid, project.id);
+          }
+
+          console.log(`[Database] Created ${standaloneProjects.length} auto-groups for standalone projects`);
+        });
+      } catch (error) {
+        console.error('[Database] Failed to run auto-group migration:', error);
+        // Don't throw - this is non-critical
+      }
+    }
   }
 
   // Project operations
-  createProject(name: string, path: string, systemPrompt?: string, runScript?: string, buildScript?: string, defaultPermissionMode?: 'approve' | 'ignore', openIdeCommand?: string, commitMode?: 'structured' | 'checkpoint' | 'disabled', commitStructuredPromptTemplate?: string, commitCheckpointPrefix?: string): Project {
-    // Get the max display_order for projects
-    const maxOrderResult = this.db.prepare(`
-      SELECT MAX(display_order) as max_order 
-      FROM projects
-    `).get() as { max_order: number | null };
-    
-    const displayOrder = (maxOrderResult?.max_order ?? -1) + 1;
-    
-    const result = this.db.prepare(`
-      INSERT INTO projects (name, path, system_prompt, run_script, build_script, default_permission_mode, open_ide_command, display_order, commit_mode, commit_structured_prompt_template, commit_checkpoint_prefix)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(name, path, systemPrompt || null, runScript || null, buildScript || null, defaultPermissionMode || 'ignore', openIdeCommand || null, displayOrder, commitMode || 'checkpoint', commitStructuredPromptTemplate || null, commitCheckpointPrefix || 'checkpoint: ');
-    
-    const project = this.getProject(result.lastInsertRowid as number);
-    if (!project) {
-      throw new Error('Failed to create project');
-    }
-    return project;
+  createProject(name: string, path: string, systemPrompt?: string, runScript?: string, buildScript?: string, defaultPermissionMode?: 'approve' | 'ignore', openIdeCommand?: string, commitMode?: 'structured' | 'checkpoint' | 'disabled', commitStructuredPromptTemplate?: string, commitCheckpointPrefix?: string, groupId?: number): Project {
+    return this.transaction(() => {
+      // Get the max display_order for projects
+      const maxOrderResult = this.db.prepare(`
+        SELECT MAX(display_order) as max_order
+        FROM projects
+      `).get() as { max_order: number | null };
+
+      const displayOrder = (maxOrderResult?.max_order ?? -1) + 1;
+
+      const result = this.db.prepare(`
+        INSERT INTO projects (name, path, system_prompt, run_script, build_script, default_permission_mode, open_ide_command, display_order, commit_mode, commit_structured_prompt_template, commit_checkpoint_prefix)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(name, path, systemPrompt || null, runScript || null, buildScript || null, defaultPermissionMode || 'ignore', openIdeCommand || null, displayOrder, commitMode || 'checkpoint', commitStructuredPromptTemplate || null, commitCheckpointPrefix || 'checkpoint: ');
+
+      const project = this.getProject(result.lastInsertRowid as number);
+      if (!project) {
+        throw new Error('Failed to create project');
+      }
+
+      // Auto-create or add to group
+      if (groupId) {
+        // Add to existing group
+        this.addProjectToGroup(groupId, project.id, true);
+      } else {
+        // Create a new group for this project
+        const groupMaxOrder = this.db.prepare('SELECT MAX(display_order) as max FROM project_groups').get() as { max: number | null };
+        const groupDisplayOrder = (groupMaxOrder?.max ?? -1) + 1;
+
+        const groupResult = this.db.prepare(`
+          INSERT INTO project_groups (name, description, display_order)
+          VALUES (?, ?, ?)
+        `).run(name, null, groupDisplayOrder);
+
+        // Add project to the new group
+        this.db.prepare(`
+          INSERT INTO project_group_members (group_id, project_id, include_in_context, display_order)
+          VALUES (?, ?, 1, 0)
+        `).run(groupResult.lastInsertRowid, project.id);
+      }
+
+      return project;
+    });
   }
 
   getProject(id: number): Project | undefined {
