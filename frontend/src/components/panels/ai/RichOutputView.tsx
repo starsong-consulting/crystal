@@ -354,8 +354,16 @@ export const RichOutputView = React.forwardRef<{ scrollToPrompt: (promptIndex: n
       const threshold = 50;
       const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
       const isAtBottom = distanceFromBottom < threshold;
-      
-      
+
+      console.log('[AutoScroll Position Check]', {
+        scrollHeight: container.scrollHeight,
+        scrollTop: container.scrollTop,
+        clientHeight: container.clientHeight,
+        distanceFromBottom,
+        isAtBottom,
+        previousWasAtBottom: wasAtBottomRef.current
+      });
+
       wasAtBottomRef.current = isAtBottom;
     };
 
@@ -364,7 +372,7 @@ export const RichOutputView = React.forwardRef<{ scrollToPrompt: (promptIndex: n
 
     // Add scroll listener
     container.addEventListener('scroll', checkIfAtBottom, { passive: true });
-    
+
     return () => {
       container.removeEventListener('scroll', checkIfAtBottom);
     };
@@ -391,16 +399,38 @@ export const RichOutputView = React.forwardRef<{ scrollToPrompt: (promptIndex: n
                         (statusChanged && (sessionStatus === 'running' || sessionStatus === 'waiting' || sessionStatus === 'completed')) ||
                         isFirstLoadRef.current;
 
+    // Debug logging
+    console.log('[AutoScroll Debug]', {
+      hasNewMessages,
+      statusChanged,
+      previousStatus,
+      currentStatus: sessionStatus,
+      startedRunning,
+      finishedRunning,
+      shouldScroll,
+      wasAtBottom: wasAtBottomRef.current,
+      isFirstLoad: isFirstLoadRef.current,
+      loading,
+      messagesCount: messages.length
+    });
+
     if (messagesEndRef.current && !loading && shouldScroll) {
       // Always scroll when starting to run (shows "thinking" indicator) or finishing
       // This handles the case where placeholder is replaced with real content
       const forceScroll = isFirstLoadRef.current || startedRunning || finishedRunning;
+
+      console.log('[AutoScroll Action]', {
+        forceScroll,
+        wasAtBottom: wasAtBottomRef.current,
+        willScroll: forceScroll || wasAtBottomRef.current
+      });
 
       if (forceScroll || wasAtBottomRef.current) {
         // Use requestAnimationFrame to ensure DOM has updated
         // Double-RAF to ensure layout is complete
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
+            console.log('[AutoScroll] Scrolling to bottom');
             // Use instant scrolling for better responsiveness during active output
             // Smooth scrolling can be too slow and cause users to miss content
             messagesEndRef.current?.scrollIntoView({ behavior: 'instant' as ScrollBehavior });
