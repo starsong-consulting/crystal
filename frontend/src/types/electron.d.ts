@@ -237,8 +237,8 @@ interface ElectronAPI {
 
   // UI State management
   uiState: {
-    getExpanded: () => Promise<IPCResponse<{ expandedProjects: number[]; expandedFolders: string[]; sessionSortAscending: boolean }>>;
-    saveExpanded: (projectIds: number[], folderIds: string[]) => Promise<IPCResponse>;
+    getExpanded: () => Promise<IPCResponse<{ expandedProjects: number[]; expandedFolders: string[]; expandedGroups: number[]; sessionSortAscending: boolean }>>;
+    saveExpanded: (projectIds: number[], folderIds: string[], groupIds?: number[]) => Promise<IPCResponse>;
     saveExpandedProjects: (projectIds: number[]) => Promise<IPCResponse>;
     saveExpandedFolders: (folderIds: string[]) => Promise<IPCResponse>;
     saveSessionSortAscending: (ascending: boolean) => Promise<IPCResponse>;

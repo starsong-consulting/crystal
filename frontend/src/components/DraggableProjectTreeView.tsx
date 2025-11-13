@@ -161,7 +161,11 @@ export const DraggableProjectTreeView = forwardRef<{ openAddGroupDialog: () => v
 
   // Expose method to parent component
   useImperativeHandle(ref, () => ({
-    openAddGroupDialog: () => setShowAddGroupDialog(true)
+    openAddGroupDialog: () => setShowAddGroupDialog(true),
+    openAddProjectDialog: () => {
+      setSelectedGroupForNewProject(null);
+      setShowAddProjectDialog(true);
+    }
   }));
 
   // Performance monitoring - track render count
@@ -182,14 +186,16 @@ export const DraggableProjectTreeView = forwardRef<{ openAddGroupDialog: () => v
   });
   
   // Create debounced save function
+  const saveUIStateInternal = async (projectIds: number[], folderIds: string[], groupIds: number[]) => {
+    try {
+      await window.electronAPI?.uiState?.saveExpanded(projectIds, folderIds, groupIds);
+    } catch (error) {
+      console.error('[DraggableProjectTreeView] Failed to save UI state:', error);
+    }
+  };
+
   const saveUIState = useCallback(
-    debounce(async (projectIds: number[], folderIds: string[]) => {
-      try {
-        await window.electronAPI?.uiState?.saveExpanded(projectIds, folderIds);
-      } catch (error) {
-        console.error('[DraggableProjectTreeView] Failed to save UI state:', error);
-      }
-    }, 500),
+    debounce(saveUIStateInternal, 500),
     []
   );
 
@@ -197,8 +203,9 @@ export const DraggableProjectTreeView = forwardRef<{ openAddGroupDialog: () => v
   useEffect(() => {
     const projectIds = Array.from(expandedProjects);
     const folderIds = Array.from(expandedFolders);
-    saveUIState(projectIds, folderIds);
-  }, [expandedProjects, expandedFolders, saveUIState]);
+    const groupIds = Array.from(expandedGroups);
+    saveUIState(projectIds, folderIds, groupIds);
+  }, [expandedProjects, expandedFolders, expandedGroups, saveUIState]);
 
   // Ensure paths are expanded when active session changes (for auto-selection)
   useEffect(() => {
@@ -598,6 +605,9 @@ export const DraggableProjectTreeView = forwardRef<{ openAddGroupDialog: () => v
           // Use saved state
           setExpandedProjects(new Set(savedState.expandedProjects));
           setExpandedFolders(new Set(savedState.expandedFolders));
+          if (savedState.expandedGroups) {
+            setExpandedGroups(new Set(savedState.expandedGroups));
+          }
         } else {
           // Fall back to auto-expand logic
           const projectsToExpand = new Set<number>();
@@ -1206,6 +1216,11 @@ export const DraggableProjectTreeView = forwardRef<{ openAddGroupDialog: () => v
           error: response.error || 'An error occurred while creating the group.'
         });
         return;
+      }
+
+      // Expand the newly created group by default
+      if (response.data && typeof response.data.id === 'number') {
+        setExpandedGroups(prev => new Set(prev).add(response.data.id));
       }
 
       setShowAddGroupDialog(false);
@@ -2345,6 +2360,7 @@ export const DraggableProjectTreeView = forwardRef<{ openAddGroupDialog: () => v
                       </>
                     ) : (
                       <>
+                        <FolderIcon className="w-4 h-4 text-text-tertiary" />
                         <span className="text-sm font-bold text-text-primary flex-1">{group.name}</span>
                         <button
                           onClick={(e) => {
@@ -2683,6 +2699,7 @@ export const DraggableProjectTreeView = forwardRef<{ openAddGroupDialog: () => v
                       )}
                     </button>
 
+                    <FolderIcon className="w-4 h-4 text-text-tertiary" />
                     <span className="text-sm font-bold text-text-primary flex-1">Ungrouped</span>
                   </div>
 
@@ -2950,19 +2967,6 @@ export const DraggableProjectTreeView = forwardRef<{ openAddGroupDialog: () => v
               );
             })()}
 
-            {/* New Project Button */}
-            <div className="mt-3 pt-3 border-t border-border-primary">
-              <button
-                onClick={() => {
-                  setSelectedGroupForNewProject(null);
-                  setShowAddProjectDialog(true);
-                }}
-                className="w-full px-2 py-1.5 text-sm text-text-secondary hover:text-text-primary hover:bg-surface-hover rounded transition-colors flex items-center justify-center space-x-2"
-              >
-                <Plus className="w-4 h-4" />
-                <span>New Project</span>
-              </button>
-            </div>
           </>
         )}
         
