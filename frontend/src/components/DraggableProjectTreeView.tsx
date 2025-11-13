@@ -104,6 +104,9 @@ export function DraggableProjectTreeView({ sessionSortAscending }: DraggableProj
   const [showProjectSettings, setShowProjectSettings] = useState(false);
   const [selectedProjectForSettings, setSelectedProjectForSettings] = useState<Project | null>(null);
   const [showAddProjectDialog, setShowAddProjectDialog] = useState(false);
+  const [showAddGroupDialog, setShowAddGroupDialog] = useState(false);
+  const [newGroupName, setNewGroupName] = useState('');
+  const [newGroupDescription, setNewGroupDescription] = useState('');
   // Track which group the user wants to add a new project to (will be used to auto-assign project to group after creation)
   const [selectedGroupForNewProject, setSelectedGroupForNewProject] = useState<ProjectGroupWithProjects | null>(null);
   const [newProject, setNewProject] = useState<CreateProjectRequest>({ name: '', path: '', buildScript: '', runScript: '' });
@@ -1169,6 +1172,40 @@ export function DraggableProjectTreeView({ sessionSortAscending }: DraggableProj
         title: 'Failed to Create Project',
         error: error instanceof Error ? error.message : 'An error occurred while creating the project.',
         details: error instanceof Error ? error.stack : String(error)
+      });
+    }
+  };
+
+  const handleCreateGroup = async () => {
+    if (!newGroupName.trim()) {
+      return;
+    }
+
+    try {
+      const response = await window.electronAPI.projectGroups.create({
+        name: newGroupName.trim(),
+        description: newGroupDescription.trim() || undefined
+      });
+
+      if (!response.success) {
+        showError({
+          title: 'Failed to Create Group',
+          error: response.error || 'An error occurred while creating the group.'
+        });
+        return;
+      }
+
+      setShowAddGroupDialog(false);
+      setNewGroupName('');
+      setNewGroupDescription('');
+
+      // Reload to reflect the new group
+      await loadProjectsWithSessions();
+    } catch (error: unknown) {
+      console.error('Failed to create group:', error);
+      showError({
+        title: 'Failed to Create Group',
+        error: error instanceof Error ? error.message : 'An error occurred while creating the group.'
       });
     }
   };

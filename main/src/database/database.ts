@@ -1335,46 +1335,7 @@ export class DatabaseService {
       }
     }
 
-    // Migration 007: Auto-create groups for existing standalone projects
-    const hasAutoGroups = this.db.prepare("SELECT COUNT(*) as count FROM project_groups WHERE name LIKE 'auto-%'").get() as { count: number };
-    if (hasAutoGroups.count === 0) {
-      console.log('[Database] Running auto-group migration 007...');
-
-      try {
-        this.transaction(() => {
-          // Get all projects that aren't in a group
-          const standaloneProjects = this.db.prepare(`
-            SELECT p.* FROM projects p
-            LEFT JOIN project_group_members pgm ON p.id = pgm.project_id
-            WHERE pgm.id IS NULL
-          `).all() as Array<{ id: number; name: string }>;
-
-          // Create a group for each standalone project
-          for (const project of standaloneProjects) {
-            // Get max display order
-            const maxOrder = this.db.prepare('SELECT MAX(display_order) as max FROM project_groups').get() as { max: number | null };
-            const displayOrder = (maxOrder?.max ?? -1) + 1;
-
-            // Create group
-            const groupResult = this.db.prepare(`
-              INSERT INTO project_groups (name, description, display_order)
-              VALUES (?, ?, ?)
-            `).run(project.name, null, displayOrder);
-
-            // Add project to group
-            this.db.prepare(`
-              INSERT INTO project_group_members (group_id, project_id, include_in_context, display_order)
-              VALUES (?, ?, 1, 0)
-            `).run(groupResult.lastInsertRowid, project.id);
-          }
-
-          console.log(`[Database] Created ${standaloneProjects.length} auto-groups for standalone projects`);
-        });
-      } catch (error) {
-        console.error('[Database] Failed to run auto-group migration:', error);
-        // Don't throw - this is non-critical
-      }
-    }
+    // Migration 007: Removed - projects are ungrouped by default now
   }
 
   // Project operations
@@ -1398,26 +1359,11 @@ export class DatabaseService {
         throw new Error('Failed to create project');
       }
 
-      // Auto-create or add to group
+      // Add to group if specified
       if (groupId) {
-        // Add to existing group
         this.addProjectToGroup(groupId, project.id, true);
-      } else {
-        // Create a new group for this project
-        const groupMaxOrder = this.db.prepare('SELECT MAX(display_order) as max FROM project_groups').get() as { max: number | null };
-        const groupDisplayOrder = (groupMaxOrder?.max ?? -1) + 1;
-
-        const groupResult = this.db.prepare(`
-          INSERT INTO project_groups (name, description, display_order)
-          VALUES (?, ?, ?)
-        `).run(name, null, groupDisplayOrder);
-
-        // Add project to the new group
-        this.db.prepare(`
-          INSERT INTO project_group_members (group_id, project_id, include_in_context, display_order)
-          VALUES (?, ?, 1, 0)
-        `).run(groupResult.lastInsertRowid, project.id);
       }
+      // Otherwise, leave project ungrouped
 
       return project;
     });
