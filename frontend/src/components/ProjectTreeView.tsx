@@ -496,12 +496,12 @@ export function ProjectTreeView() {
                 <label className="block text-sm font-medium text-text-secondary mb-1">
                   Repository Path
                 </label>
-                <div className="flex items-center gap-2">
+                <div className="flex items-stretch gap-2">
                   <input
                     type="text"
                     value={newProject.path}
                     onChange={(e) => handlePathChange(e.target.value)}
-                    className="flex-1 px-3 py-2 bg-surface-secondary border border-border-primary rounded-md text-text-primary focus:outline-none focus:border-interactive focus:ring-1 focus:ring-interactive placeholder-text-tertiary"
+                    className="flex-1 min-w-0 px-3 py-2 bg-surface-secondary border border-border-primary rounded-md text-text-primary focus:outline-none focus:border-interactive focus:ring-1 focus:ring-interactive placeholder-text-tertiary"
                     placeholder="/path/to/repository"
                   />
                   <button
@@ -515,7 +515,7 @@ export function ProjectTreeView() {
                         handlePathChange(result.data);
                       }
                     }}
-                    className="px-4 py-2 text-sm font-medium text-text-secondary bg-surface-tertiary border border-border-primary rounded-md hover:bg-surface-hover focus:outline-none focus:ring-2 focus:ring-interactive whitespace-nowrap"
+                    className="flex-shrink-0 px-4 py-2 text-sm font-medium text-text-secondary bg-surface-tertiary border border-border-primary rounded-md hover:bg-surface-hover focus:outline-none focus:ring-2 focus:ring-interactive whitespace-nowrap"
                   >
                     Browse
                   </button>
