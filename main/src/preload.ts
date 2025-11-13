@@ -355,6 +355,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     listProject: (projectId: number, path?: string): Promise<IPCResponse> => ipcRenderer.invoke('file:list-project', { projectId, path }),
     readProject: (projectId: number, filePath: string): Promise<IPCResponse> => ipcRenderer.invoke('file:read-project', { projectId, filePath }),
     writeProject: (projectId: number, filePath: string, content: string): Promise<IPCResponse> => ipcRenderer.invoke('file:write-project', { projectId, filePath, content }),
+    isDirectory: (filePath: string): Promise<IPCResponse<boolean>> => ipcRenderer.invoke('file:isDirectory', filePath),
   },
 
   // Dialog

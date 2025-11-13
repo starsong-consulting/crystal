@@ -22,6 +22,7 @@ export function Sidebar({ onHelpClick, onAboutClick, onPromptHistoryClick, width
   const [gitCommit, setGitCommit] = useState<string>('');
   const [worktreeName, setWorktreeName] = useState<string>('');
   const [sessionSortAscending, setSessionSortAscending] = useState<boolean>(false); // Default to descending (newest first)
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
   const treeViewRef = useRef<{ openAddGroupDialog: () => void; openAddProjectDialog: () => void }>(null);
 
   useEffect(() => {
@@ -80,12 +81,76 @@ export function Sidebar({ onHelpClick, onAboutClick, onPromptHistoryClick, width
     }
   };
 
+  // Handle file drop from OS file manager
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Check if the drag contains files
+    if (e.dataTransfer.types.includes('Files')) {
+      setIsDraggingOver(true);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingOver(false);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingOver(false);
+
+    // Get the dropped files/folders
+    const files = Array.from(e.dataTransfer.files);
+
+    if (files.length === 0) return;
+
+    // Process each dropped item
+    for (const file of files) {
+      // The file.path gives us the full path in Electron
+      const path = (file as File & { path?: string }).path;
+
+      if (!path) continue;
+
+      // Check if it's a directory by calling the backend
+      try {
+        const isDirResponse = await window.electronAPI.file.isDirectory(path);
+
+        if (isDirResponse.success && isDirResponse.data) {
+          // Extract the project name from the last path component
+          const pathParts = path.split(/[/\\]/);
+          const projectName = pathParts[pathParts.length - 1] || 'New Project';
+
+          // Create the project
+          const response = await window.electronAPI.projects.create({
+            name: projectName,
+            path: path
+          });
+
+          if (!response.success) {
+            console.error(`Failed to create project from ${path}:`, response.error);
+          }
+        }
+      } catch (error) {
+        console.error(`Error processing dropped path ${path}:`, error);
+      }
+    }
+  };
+
   return (
     <>
-      <div 
-        data-testid="sidebar" 
-        className="bg-surface-primary text-text-primary h-full flex flex-col pt-4 relative flex-shrink-0 border-r border-border-primary"
+      <div
+        data-testid="sidebar"
+        className={`bg-surface-primary text-text-primary h-full flex flex-col pt-4 relative flex-shrink-0 border-r border-border-primary ${
+          isDraggingOver ? 'ring-2 ring-inset ring-interactive' : ''
+        }`}
         style={{ width: `${width}px` }}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
       >
         {/* Resize handle */}
         <div

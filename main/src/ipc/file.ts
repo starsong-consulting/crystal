@@ -863,4 +863,21 @@ Co-Authored-By: Crystal <crystal@stravu.com>` : request.message;
       };
     }
   });
+
+  // Check if a path is a directory
+  ipcMain.handle('file:isDirectory', async (_, filePath: string) => {
+    try {
+      const stats = await fs.stat(filePath);
+      return {
+        success: true,
+        data: stats.isDirectory()
+      };
+    } catch (error) {
+      console.error('[file:isDirectory] Error checking path:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to check path'
+      };
+    }
+  });
 }

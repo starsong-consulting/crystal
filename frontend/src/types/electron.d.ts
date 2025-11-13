@@ -1,6 +1,6 @@
 // Type definitions for Electron preload API
 import type { Session, SessionOutput, GitStatus, VersionUpdateInfo } from './session';
-import type { Project } from './project';
+import type { Project, CreateProjectRequest } from './project';
 import type { Folder } from './folder';
 import type { SessionCreationPreferences } from '../stores/sessionPreferencesStore';
 import type { ToolPanel } from '../../../shared/types/panels';
@@ -137,7 +137,7 @@ interface ElectronAPI {
   projects: {
     getAll: () => Promise<IPCResponse>;
     getActive: () => Promise<IPCResponse>;
-    create: (projectData: Omit<Project, 'id' | 'created_at' | 'updated_at'>) => Promise<IPCResponse>;
+    create: (projectData: CreateProjectRequest) => Promise<IPCResponse>;
     activate: (projectId: string) => Promise<IPCResponse>;
     update: (projectId: string, updates: Partial<Project>) => Promise<IPCResponse>;
     delete: (projectId: string) => Promise<IPCResponse>;
@@ -202,6 +202,7 @@ interface ElectronAPI {
     listProject: (projectId: number, path?: string) => Promise<IPCResponse>;
     readProject: (projectId: number, filePath: string) => Promise<IPCResponse>;
     writeProject: (projectId: number, filePath: string, content: string) => Promise<IPCResponse>;
+    isDirectory: (filePath: string) => Promise<IPCResponse<boolean>>;
   };
 
   // Dialog
