@@ -36,6 +36,7 @@ export interface CreateProjectRequest {
   commitMode?: 'structured' | 'checkpoint' | 'disabled';
   commitStructuredPromptTemplate?: string;
   commitCheckpointPrefix?: string;
+  groupId?: number;
 }
 
 export interface UpdateProjectRequest {

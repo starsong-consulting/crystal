@@ -1136,7 +1136,14 @@ export function DraggableProjectTreeView({ sessionSortAscending }: DraggableProj
     }
 
     try {
-      const response = await API.projects.create({ ...newProject, active: false });
+      // Include groupId in the create request if a group was selected
+      const createRequest = {
+        ...newProject,
+        active: false,
+        groupId: selectedGroupForNewProject?.id
+      };
+
+      const response = await API.projects.create(createRequest);
 
       if (!response.success) {
         showError({
@@ -1146,20 +1153,6 @@ export function DraggableProjectTreeView({ sessionSortAscending }: DraggableProj
           command: response.command
         });
         return;
-      }
-
-      // If a group was selected, add the project to that group
-      if (selectedGroupForNewProject && response.data?.id) {
-        try {
-          await window.electronAPI.projectGroups.addProject({
-            group_id: selectedGroupForNewProject.id,
-            project_id: response.data.id,
-            include_in_context: true
-          });
-        } catch (groupError) {
-          console.error('Failed to add project to group:', groupError);
-          // Don't fail the whole operation, just log the error
-        }
       }
 
       setShowAddProjectDialog(false);

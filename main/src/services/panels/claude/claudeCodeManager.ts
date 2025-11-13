@@ -140,23 +140,29 @@ export class ClaudeCodeManager extends AbstractCliManager {
       const db = this.sessionManager.db;
       const groupInfo = db.getProjectGroupForProject(dbSession.project_id);
 
+      console.log('[ClaudeCodeManager] Checking for project group. Project ID:', dbSession.project_id, 'Group info:', groupInfo ? `Group "${groupInfo.group.name}" (ID: ${groupInfo.group.id})` : 'No group found');
+
       if (groupInfo) {
         // Get all peer projects in the group with include_in_context=true
         const peerMembers = db.getProjectGroupMembers(groupInfo.group.id)
           .filter((member: { include_in_context: boolean; project_id: number }) =>
             member.include_in_context && member.project_id !== dbSession.project_id);
 
+        console.log('[ClaudeCodeManager] Found', peerMembers.length, 'peer projects in group');
+
         // Add --add-dir for each peer project
         for (const peerMember of peerMembers) {
           const peerProject = db.getProject(peerMember.project_id);
           if (peerProject) {
             args.push('--add-dir', peerProject.path);
+            console.log('[ClaudeCodeManager] Adding --add-dir:', peerProject.path, '(', peerProject.name, ')');
             this.logger?.verbose(`Adding peer repository to context: ${peerProject.name} (${peerProject.path})`);
           }
         }
 
         if (peerMembers.length > 0) {
           this.logger?.info(`Added ${peerMembers.length} peer repositories from project group "${groupInfo.group.name}"`);
+          console.log('[ClaudeCodeManager] Final args array:', args);
         }
       }
     }
