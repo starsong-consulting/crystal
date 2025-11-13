@@ -376,13 +376,13 @@ export const RichOutputView = React.forwardRef<{ scrollToPrompt: (promptIndex: n
     const hasNewMessages = messages.length > previousMessageCountRef.current;
     previousMessageCountRef.current = messages.length;
 
-    // Check if status changed (especially to 'waiting' which means task completed)
+    // Check if status changed (to show thinking indicator or completion)
     const statusChanged = sessionStatus !== previousStatusRef.current;
     previousStatusRef.current = sessionStatus;
 
-    // Scroll if: new messages, status changed to waiting/completed, or first load
+    // Scroll if: new messages, status changed to running/waiting/completed, or first load
     const shouldScroll = hasNewMessages ||
-                        (statusChanged && (sessionStatus === 'waiting' || sessionStatus === 'completed')) ||
+                        (statusChanged && (sessionStatus === 'running' || sessionStatus === 'waiting' || sessionStatus === 'completed')) ||
                         isFirstLoadRef.current;
 
     if (messagesEndRef.current && !loading && shouldScroll) {
