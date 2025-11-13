@@ -1508,7 +1508,59 @@ export const DraggableProjectTreeView = forwardRef<{ openAddGroupDialog: () => v
     e.stopPropagation();
     
     if (dragState.type === 'project' && dragState.projectId && dragState.projectId !== targetProject.id) {
-      // Reorder projects
+      // Check if projects are in different groups
+      const sourceGroup = groups.find(g => g.projects.some(p => p.id === dragState.projectId));
+      const targetGroup = groups.find(g => g.projects.some(p => p.id === targetProject.id));
+
+      // If they're in different groups, move the project to the target's group first
+      if (sourceGroup?.id !== targetGroup?.id) {
+        try {
+          // Remove from current group if exists
+          if (sourceGroup) {
+            const removeResponse = await window.electronAPI.projectGroups.removeProject(sourceGroup.id, dragState.projectId);
+            if (!removeResponse.success) {
+              showError({
+                title: 'Failed to move project',
+                error: removeResponse.error || 'Failed to remove from current group'
+              });
+              handleDragEnd();
+              return;
+            }
+          }
+
+          // Add to target group if exists
+          if (targetGroup) {
+            const addResponse = await window.electronAPI.projectGroups.addProject({
+              group_id: targetGroup.id,
+              project_id: dragState.projectId,
+              include_in_context: true
+            });
+            if (!addResponse.success) {
+              showError({
+                title: 'Failed to add project to group',
+                error: addResponse.error || 'Unknown error occurred'
+              });
+              handleDragEnd();
+              return;
+            }
+          }
+
+          // Reload to reflect the group change
+          await loadProjectsWithSessions();
+          handleDragEnd();
+          return;
+        } catch (error: unknown) {
+          console.error('Failed to move project between groups:', error);
+          showError({
+            title: 'Failed to move project',
+            error: error instanceof Error ? error.message : 'Unknown error occurred'
+          });
+          handleDragEnd();
+          return;
+        }
+      }
+
+      // If in same group (or both ungrouped), reorder projects
       const sourceIndex = projectsWithSessions.findIndex(p => p.id === dragState.projectId);
       const targetIndex = projectsWithSessions.findIndex(p => p.id === targetProject.id);
 
@@ -1527,13 +1579,13 @@ export const DraggableProjectTreeView = forwardRef<{ openAddGroupDialog: () => v
         }
 
         newProjects.splice(insertIndex, 0, removed);
-        
+
         // Update display order for all projects
         const projectOrders = newProjects.map((project, index) => ({
           id: project.id,
           displayOrder: index
         }));
-        
+
         try {
           const response = await API.projects.reorder(projectOrders);
           if (response.success) {
@@ -2477,7 +2529,13 @@ export const DraggableProjectTreeView = forwardRef<{ openAddGroupDialog: () => v
 
                   {/* Projects in this group */}
                   {isGroupExpanded && (
-                    <div className="ml-4 mt-1 space-y-1">
+                    <div
+                      className="ml-4 mt-1 space-y-1"
+                      onDragOver={(e) => handleGroupDragOver(e, group.id)}
+                      onDrop={(e) => handleGroupDrop(e, group.id)}
+                      onDragEnter={handleDragEnter}
+                      onDragLeave={handleDragLeave}
+                    >
                       {projectsInGroup.map((project) => {
           const isExpanded = expandedProjects.has(project.id);
           const sessionCount = project.sessions.length;
@@ -2809,7 +2867,13 @@ export const DraggableProjectTreeView = forwardRef<{ openAddGroupDialog: () => v
 
                   {/* Projects in ungrouped virtual group */}
                   {isGroupExpanded && (
-                    <div className="ml-4 mt-1 space-y-1">
+                    <div
+                      className="ml-4 mt-1 space-y-1"
+                      onDragOver={(e) => handleGroupDragOver(e, UNGROUPED_GROUP_ID)}
+                      onDrop={(e) => handleGroupDrop(e, null)}
+                      onDragEnter={handleDragEnter}
+                      onDragLeave={handleDragLeave}
+                    >
                       {ungroupedProjects.length === 0 ? (
                         <div className="px-2 py-3 text-sm text-text-tertiary italic">
                           No ungrouped projects. Drag projects here to remove them from groups.
