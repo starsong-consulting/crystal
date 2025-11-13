@@ -2464,7 +2464,7 @@ export const DraggableProjectTreeView = forwardRef<{ openAddGroupDialog: () => v
           const isActiveProject = activeProjectId === project.id;
           
           return (
-            <div key={project.id} className="mb-1">
+            <div key={project.id} className="mb-1 relative">
               {/* Insertion indicator - before */}
               {isDraggingOver && dragState.insertPosition === 'before' && (
                 <div className="absolute left-0 right-0 -top-0.5 h-0.5 bg-interactive z-10">
@@ -2801,14 +2801,19 @@ export const DraggableProjectTreeView = forwardRef<{ openAddGroupDialog: () => v
           const isActiveProject = activeProjectId === project.id;
 
           return (
-            <div key={project.id} className="mb-1">
+            <div key={project.id} className="mb-1 relative">
+              {/* Insertion indicator - before */}
+              {isDraggingOver && dragState.insertPosition === 'before' && (
+                <div className="absolute left-0 right-0 -top-0.5 h-0.5 bg-interactive z-10">
+                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1.5 h-1.5 bg-interactive rounded-full" />
+                </div>
+              )}
+
               <div
                 className={`group flex items-center space-x-1 px-2 py-2 rounded-lg transition-colors ${
                   isActiveProject
                     ? 'bg-interactive/10 text-interactive'
-                    : isDraggingOver
-                      ? 'bg-interactive/20'
-                      : 'bg-surface-secondary/50 hover:bg-surface-hover'
+                    : 'bg-surface-secondary/50 hover:bg-surface-hover'
                 }`}
                 draggable
                 onDragStart={(e) => handleProjectDragStart(e, project)}
