@@ -1130,7 +1130,7 @@ export const DraggableProjectTreeView = forwardRef<{ openAddGroupDialog: () => v
 
   const detectCurrentBranch = async (path: string) => {
     if (!path) return;
-    
+
     try {
       const response = await API.projects.detectBranch(path);
       if (response.success && response.data) {
@@ -1139,6 +1139,24 @@ export const DraggableProjectTreeView = forwardRef<{ openAddGroupDialog: () => v
     } catch (error) {
       console.log('Could not detect branch');
       setDetectedBranchForNewProject(null);
+    }
+  };
+
+  const deriveProjectNameFromPath = (path: string): string => {
+    if (!path) return '';
+    // Get the last component of the path
+    const lastComponent = path.split(/[/\\]/).filter(Boolean).pop() || '';
+    return lastComponent;
+  };
+
+  const handlePathChange = (path: string) => {
+    setNewProject({ ...newProject, path });
+    detectCurrentBranch(path);
+
+    // Auto-derive the project name from the path if it's empty
+    if (!newProject.name) {
+      const derivedName = deriveProjectNameFromPath(path);
+      setNewProject(prev => ({ ...prev, name: derivedName }));
     }
   };
 
@@ -3090,10 +3108,49 @@ export const DraggableProjectTreeView = forwardRef<{ openAddGroupDialog: () => v
                 <FolderIcon className="w-5 h-5 text-interactive" />
                 <h3 className="text-heading-3 font-semibold text-text-primary">Project Information</h3>
               </div>
-              
+
+              <FieldWithTooltip
+                label="Repository Path"
+                tooltip="Path to your git repository. This is where Crystal will create worktrees for parallel development."
+                required
+              >
+                <div className="flex items-stretch gap-2">
+                  <EnhancedInput
+                    type="text"
+                    value={newProject.path}
+                    onChange={(e) => {
+                      handlePathChange(e.target.value);
+                      if (showValidationErrors) setShowValidationErrors(false);
+                    }}
+                    placeholder="/path/to/your/repository"
+                    size="lg"
+                    fullWidth
+                    required
+                    showRequiredIndicator={showValidationErrors}
+                  />
+                  <Button
+                    type="button"
+                    onClick={async () => {
+                      const result = await API.dialog.openDirectory({
+                        title: 'Select Repository Directory',
+                        buttonLabel: 'Select',
+                      });
+                      if (result.success && result.data) {
+                        handlePathChange(result.data);
+                      }
+                    }}
+                    variant="secondary"
+                    size="lg"
+                    className="flex-shrink-0"
+                  >
+                    Browse
+                  </Button>
+                </div>
+              </FieldWithTooltip>
+
               <FieldWithTooltip
                 label="Project Name"
-                tooltip="A descriptive name for your project that will appear in the project selector."
+                tooltip="A descriptive name for your project that will appear in the project selector. Automatically derived from the repository path."
                 required
               >
                 <EnhancedInput
@@ -3103,54 +3160,12 @@ export const DraggableProjectTreeView = forwardRef<{ openAddGroupDialog: () => v
                     setNewProject({ ...newProject, name: e.target.value });
                     if (showValidationErrors) setShowValidationErrors(false);
                   }}
-                  placeholder="Enter project name"
+                  placeholder="Auto-derived from path"
                   size="lg"
                   fullWidth
                   required
                   showRequiredIndicator={showValidationErrors}
                 />
-              </FieldWithTooltip>
-
-              <FieldWithTooltip
-                label="Repository Path"
-                tooltip="Path to your git repository. This is where Crystal will create worktrees for parallel development."
-                required
-              >
-                <div className="space-y-3">
-                  <EnhancedInput
-                    type="text"
-                    value={newProject.path}
-                    onChange={(e) => {
-                      setNewProject({ ...newProject, path: e.target.value });
-                      detectCurrentBranch(e.target.value);
-                      if (showValidationErrors) setShowValidationErrors(false);
-                    }}
-                    placeholder="/path/to/your/repository"
-                    size="lg"
-                    fullWidth
-                    required
-                    showRequiredIndicator={showValidationErrors}
-                  />
-                  <div className="flex justify-end">
-                    <Button
-                      type="button"
-                      onClick={async () => {
-                        const result = await API.dialog.openDirectory({
-                          title: 'Select Repository Directory',
-                          buttonLabel: 'Select',
-                        });
-                        if (result.success && result.data) {
-                          setNewProject({ ...newProject, path: result.data });
-                          detectCurrentBranch(result.data);
-                        }
-                      }}
-                      variant="secondary"
-                      size="sm"
-                    >
-                      Browse
-                    </Button>
-                  </div>
-                </div>
               </FieldWithTooltip>
             </div>
 
