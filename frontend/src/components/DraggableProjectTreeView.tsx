@@ -1156,6 +1156,9 @@ export const DraggableProjectTreeView = forwardRef<{ openAddGroupDialog: () => v
         groupId: selectedGroupForNewProject?.id
       };
 
+      console.log('[DraggableProjectTreeView] Creating project with request:', createRequest);
+      console.log('[DraggableProjectTreeView] selectedGroupForNewProject:', selectedGroupForNewProject);
+
       const response = await API.projects.create(createRequest);
 
       if (!response.success) {
@@ -1879,7 +1882,15 @@ export const DraggableProjectTreeView = forwardRef<{ openAddGroupDialog: () => v
     e.stopPropagation();
 
     // Only allow dragging projects into groups
-    if (dragState.type === 'project') {
+    if (dragState.type === 'project' && dragState.projectId !== null) {
+      // Check if the dragged project is already in this group
+      const currentGroup = groups.find(g => g.projects.some(p => p.id === dragState.projectId));
+
+      // Don't show drop target if dragging over the current group
+      if (currentGroup?.id === groupId) {
+        return;
+      }
+
       setDragState(prev => ({
         ...prev,
         overType: 'group',
@@ -2272,7 +2283,11 @@ export const DraggableProjectTreeView = forwardRef<{ openAddGroupDialog: () => v
               const isGroupExpanded = expandedGroups.has(group.id);
               const projectsInGroup = projectsWithSessions.filter(p => group.projects.some(gp => gp.id === p.id));
 
-              const isDraggingOverGroup = dragState.overType === 'group' && dragState.overGroupId === group.id;
+              // Check if the dragged project is already in this group
+              const draggedProjectInThisGroup = dragState.type === 'project' && dragState.projectId !== null &&
+                group.projects.some(p => p.id === dragState.projectId);
+
+              const isDraggingOverGroup = dragState.overType === 'group' && dragState.overGroupId === group.id && !draggedProjectInThisGroup;
 
               return (
                 <div key={group.id} className="mb-2">

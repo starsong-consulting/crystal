@@ -1361,7 +1361,10 @@ export class DatabaseService {
 
       // Add to group if specified
       if (groupId) {
+        console.log(`[Database] Adding project ${project.id} to group ${groupId}`);
         this.addProjectToGroup(groupId, project.id, true);
+      } else {
+        console.log(`[Database] Leaving project ${project.id} ungrouped (no groupId provided)`);
       }
       // Otherwise, leave project ungrouped
 

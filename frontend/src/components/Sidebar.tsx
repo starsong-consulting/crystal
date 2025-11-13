@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Settings } from './Settings';
 import { DraggableProjectTreeView } from './DraggableProjectTreeView';
 import { ArchiveProgress } from './ArchiveProgress';
-import { Info, Clock, Check, Edit, CircleArrowDown, AlertTriangle, GitMerge, ArrowUpDown, Plus } from 'lucide-react';
+import { Info, Clock, Check, Edit, CircleArrowDown, AlertTriangle, GitMerge, ArrowUpDown, FolderPlus } from 'lucide-react';
 import crystalLogo from '../assets/crystal-logo.svg';
 import { IconButton } from './ui/Button';
 import { Modal, ModalHeader, ModalBody } from './ui/Modal';
@@ -145,7 +145,7 @@ export function Sidebar({ onHelpClick, onAboutClick, onPromptHistoryClick, width
                 aria-label="Add Group"
                 size="sm"
                 onClick={() => treeViewRef.current?.openAddGroupDialog()}
-                icon={<Plus className="w-4 h-4" />}
+                icon={<FolderPlus className="w-4 h-4" />}
               />
               <IconButton
                 aria-label={sessionSortAscending ? "Sort sessions: Oldest first (click to reverse)" : "Sort sessions: Newest first (click to reverse)"}
