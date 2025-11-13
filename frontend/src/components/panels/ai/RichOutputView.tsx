@@ -378,7 +378,13 @@ export const RichOutputView = React.forwardRef<{ scrollToPrompt: (promptIndex: n
 
     // Check if status changed (to show thinking indicator or completion)
     const statusChanged = sessionStatus !== previousStatusRef.current;
+    const previousStatus = previousStatusRef.current;
     previousStatusRef.current = sessionStatus;
+
+    // Detect specific transitions that should always trigger scroll
+    const startedRunning = statusChanged && sessionStatus === 'running';
+    const finishedRunning = statusChanged && previousStatus === 'running' &&
+                           (sessionStatus === 'waiting' || sessionStatus === 'completed');
 
     // Scroll if: new messages, status changed to running/waiting/completed, or first load
     const shouldScroll = hasNewMessages ||
@@ -386,9 +392,11 @@ export const RichOutputView = React.forwardRef<{ scrollToPrompt: (promptIndex: n
                         isFirstLoadRef.current;
 
     if (messagesEndRef.current && !loading && shouldScroll) {
-      // Use the wasAtBottomRef value that was captured BEFORE the messages updated
-      // Don't double-check after DOM update as the scroll position will have changed
-      if (isFirstLoadRef.current || wasAtBottomRef.current) {
+      // Always scroll when starting to run (shows "thinking" indicator) or finishing
+      // This handles the case where placeholder is replaced with real content
+      const forceScroll = isFirstLoadRef.current || startedRunning || finishedRunning;
+
+      if (forceScroll || wasAtBottomRef.current) {
         // Use requestAnimationFrame to ensure DOM has updated
         // Double-RAF to ensure layout is complete
         requestAnimationFrame(() => {
