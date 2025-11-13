@@ -496,7 +496,7 @@ export function ProjectTreeView() {
                 <label className="block text-sm font-medium text-text-secondary mb-1">
                   Repository Path
                 </label>
-                <div className="flex gap-2">
+                <div className="flex items-center gap-2">
                   <input
                     type="text"
                     value={newProject.path}
@@ -515,7 +515,7 @@ export function ProjectTreeView() {
                         handlePathChange(result.data);
                       }
                     }}
-                    className="px-4 py-2 text-sm font-medium text-text-secondary bg-surface-tertiary border border-border-primary rounded-md hover:bg-surface-hover focus:outline-none focus:ring-2 focus:ring-interactive"
+                    className="px-4 py-2 text-sm font-medium text-text-secondary bg-surface-tertiary border border-border-primary rounded-md hover:bg-surface-hover focus:outline-none focus:ring-2 focus:ring-interactive whitespace-nowrap"
                   >
                     Browse
                   </button>
