@@ -3114,7 +3114,7 @@ export const DraggableProjectTreeView = forwardRef<{ openAddGroupDialog: () => v
                 tooltip="Path to your git repository. This is where Crystal will create worktrees for parallel development."
                 required
               >
-                <div className="flex items-stretch gap-2">
+                <div className="flex items-center gap-2">
                   <EnhancedInput
                     type="text"
                     value={newProject.path}
